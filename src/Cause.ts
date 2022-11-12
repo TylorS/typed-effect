@@ -11,41 +11,41 @@ export type Cause<E> =
 
 export class CauseError<E> extends Error {
   constructor(readonly cause: Cause<E>) {
-    super()
+    super() // TODO: Pretty printing
   }
 }
 
 export class Empty {
-  readonly _tag = 'Empty'
+  readonly tag = 'Empty'
 }
 
 export class Expected<E> {
-  readonly _tag = 'Expected'
+  readonly tag = 'Expected'
   constructor(readonly error: E) {}
 }
 
 export class Unexpected {
-  readonly _tag = 'Unexpected'
+  readonly tag = 'Unexpected'
   constructor(readonly error: unknown) {}
 }
 
 export class Interrupted {
-  readonly _tag = 'Interrupted'
+  readonly tag = 'Interrupted'
   constructor(readonly fiberId: FiberId) {}
 }
 
 export class Sequential<E> {
-  readonly _tag = 'Then'
+  readonly tag = 'Sequential'
   constructor(readonly left: Cause<E>, readonly right: Cause<E>) {}
 }
 
 export class Concurrent<E> {
-  readonly _tag = 'Both'
+  readonly tag = 'Concurrent'
   constructor(readonly left: Cause<E>, readonly right: Cause<E>) {}
 }
 
 export class Traced<E> {
-  readonly _tag = 'Traced'
+  readonly tag = 'Traced'
   // TODO: Improve trace type
   constructor(readonly cause: Cause<E>, readonly trace: string) {}
 }

@@ -6,13 +6,13 @@ import { pipe } from 'node_modules/@fp-ts/data/Function.js'
 
 import { Expected } from './Cause.js'
 import * as Effect from './Effect.js'
-import { FiberRuntime } from './FiberRuntime.js'
+import { runMain, runMainExit } from './operators.js'
 
 describe(import.meta.url, () => {
   describe(Effect.of.name, () => {
     it('lifts a value into an Effect context', async () => {
       const value = Math.random()
-      const result = await FiberRuntime.runPromise(Effect.of(value), C.empty())
+      const result = await runMain(Effect.of(value))
 
       deepStrictEqual(result, value)
     })
@@ -22,7 +22,9 @@ describe(import.meta.url, () => {
     it('lifts a Cause into an Effect context', async () => {
       const value = Math.random()
       const cause = new Expected(value)
-      const exit = await FiberRuntime.runPromiseExit(Effect.fromCause(cause), C.empty())
+      const exit = await runMainExit(Effect.fromCause(cause), {
+        context: C.empty(),
+      })
 
       deepStrictEqual(exit, left(cause))
     })
@@ -44,7 +46,7 @@ describe(import.meta.url, () => {
 
     for (let i = 0; i < 20; ++i) {
       console.time('Fib25')
-      const result = await FiberRuntime.runPromise(fib(25), C.empty())
+      const result = await runMain(fib(25))
       console.timeEnd('Fib25')
       deepStrictEqual(result, 75025)
     }

@@ -1,7 +1,13 @@
 import type { Context } from '@fp-ts/data/Context'
+import { left, right } from '@fp-ts/data/Either'
+import { pipe } from '@fp-ts/data/Function'
+import { Option } from '@fp-ts/data/Option'
 
 import { Cause, CauseError } from './Cause.js'
 import type { Exit } from './Exit.js'
+import type { FiberRef } from './FiberRef.js'
+import type { FiberRefs } from './FiberRefs.js'
+import { FiberRuntimeFlags } from './FiberRuntimeFlags.js'
 import type { Future } from './Future.js'
 import * as I from './Instruction.js'
 
@@ -66,11 +72,22 @@ export function fromExit<E, A>(exit: Exit<E, A>, __trace?: string): Effect<never
   return exit._tag === 'Right' ? of(exit.right, __trace) : fromCause(exit.left, __trace)
 }
 
+export function sync<A>(f: () => A, __trace?: string): Effect<never, never, A> {
+  return new I.Sync(f, __trace)
+}
+
 export function access<R, R2, E2, A>(
   f: (r: Context<R>) => Effect<R2, E2, A>,
   __trace?: string,
 ): Effect<R | R2, E2, A> {
   return new I.AccessContext<R, R2, E2, A>(f, __trace)
+}
+
+export function provide<R>(
+  context: Context<R>,
+  __trace?: string,
+): <E, A>(effect: Effect<R, E, A>) => Effect<never, E, A> {
+  return (effect) => new I.ProvideContext([effect, context], __trace)
 }
 
 export function lazy<R, E, A>(f: () => Effect<R, E, A>, __trace?: string): Effect<R, E, A> {
@@ -92,6 +109,20 @@ export function matchCause<E, R2, E2, B, A, R3, E3, C>(
 ) {
   return <R>(eff: Effect<R, E, A>): Effect<R | R2 | R3, E2 | E3, B | C> =>
     new I.Match<R, E, A, R2, E2, B, R3, E3, C>([eff, onCause, onValue], __trace)
+}
+
+export function attempt<R, E, A>(
+  eff: Effect<R, E, A>,
+  __trace?: string,
+): Effect<R, never, Exit<E, A>> {
+  return pipe(
+    eff,
+    matchCause(
+      (cause) => of(left(cause)),
+      (value) => of(right(value)),
+      __trace,
+    ),
+  )
 }
 
 export function flatMapCause<E, R2, E2, B>(
@@ -117,3 +148,49 @@ export function uninterruptable<R, E, A>(eff: Effect<R, E, A>): Effect<R, E, A> 
 export function interruptible<R, E, A>(eff: Effect<R, E, A>): Effect<R, E, A> {
   return new I.SetInterruptStatus([eff, true])
 }
+
+export const getFiberRefs: Effect<never, never, FiberRefs> = new I.GetFiberRefs()
+export const getRuntimeFlags: Effect<never, never, FiberRuntimeFlags> = new I.GetRuntimeFlags()
+
+export const getFiberRef = <R, E, A>(ref: FiberRef<R, E, A>): Effect<R, E, A> =>
+  pipe(
+    getFiberRefs,
+    flatMap((refs) => refs.get(ref)),
+  )
+
+export const getFiberRefOption = <R, E, A>(
+  ref: FiberRef<R, E, A>,
+): Effect<never, never, Option<A>> =>
+  pipe(
+    getFiberRefs,
+    map((refs) => refs.getOption(ref)),
+  )
+
+export const setFiberRef =
+  <A>(value: A) =>
+  <R, E>(ref: FiberRef<R, E, A>): Effect<R, E, A> =>
+    pipe(
+      getFiberRefs,
+      flatMap((refs) => refs.set(ref, value)),
+    )
+
+export const modifyFiberRef =
+  <A, B>(f: (a: A) => readonly [B, A]) =>
+  <R, E>(ref: FiberRef<R, E, A>): Effect<R, E, B> =>
+    pipe(
+      getFiberRefs,
+      flatMap((refs) => refs.modify(ref, f)),
+    )
+
+export const removeFiberRef = <R, E, A>(ref: FiberRef<R, E, A>): Effect<R, E, Option<A>> =>
+  pipe(
+    getFiberRefs,
+    flatMap((refs) => refs.delete(ref)),
+  )
+
+export { removeFiberRef as deleteFiberRef }
+
+export const withFiberRefs =
+  (refs: FiberRefs, __trace?: string) =>
+  <R, E, A>(effect: Effect<R, E, A>): Effect<R, E, A> =>
+    new I.WithFiberRefs([effect, refs], __trace)

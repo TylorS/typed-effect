@@ -1,6 +1,6 @@
+import { Tag } from '@fp-ts/data/Context'
 import * as Duration from '@fp-ts/data/Duration'
 import * as O from '@fp-ts/data/Option'
-import { Tag } from '@fp-ts/data/Context'
 
 import { Clock } from './Clock.js'
 import { Disposable } from './Disposable.js'
@@ -63,7 +63,7 @@ export interface ScheduleDone {
   readonly tag: 'Done'
 }
 
-export function RootScheduler(timer: Timer = makeSetTimeoutTimer()): Scheduler {
+export function makeScheduler(timer: Timer = makeSetTimeoutTimer()): Scheduler {
   const [disposable, add] = callbackScheduler(timer)
 
   const delay: Scheduler['delay'] = (effect, duration) =>

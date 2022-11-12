@@ -47,7 +47,6 @@ lib
 .cache-loader
 
 # other stuff
-src/test.ts
 .DS_STORE
 .vscode
 .fusebox

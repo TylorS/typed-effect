@@ -7,23 +7,28 @@ import * as Cause from './Cause.js'
 import { Disposable } from './Disposable.js'
 import { Effect } from './Effect.js'
 import { Exit } from './Exit.js'
-import { Fiber } from './Fiber.js'
-import { FiberContext } from './FiberContext.js'
-import { FiberId } from './FiberId.js'
-import { FiberRuntimeFlags } from './FiberRuntimeFlags.js'
+import type { Fiber } from './Fiber.js'
+import type { FiberId } from './FiberId.js'
+import type { FiberRefs } from './FiberRefs.js'
+import type { FiberRuntimeFlags } from './FiberRuntimeFlags.js'
 import * as FiberStatus from './FiberStatus.js'
 import { pending } from './Future.js'
 import * as I from './Instruction.js'
 
+export interface FiberRuntimeOptions<R> {
+  readonly context: Context<R>
+  readonly fiberRefs: FiberRefs
+  readonly flags: FiberRuntimeFlags
+}
+
 export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Output> {
   static runWith<R, E, A>(
     effect: Effect<R, E, A>,
-    context: Context<R>,
-    fiberContext: FiberContext,
-    flags: FiberRuntimeFlags,
+    id: FiberId,
+    options: FiberRuntimeOptions<R>,
     f: (exit: Exit<E, A>) => void,
   ) {
-    const runtime = new FiberRuntime(effect, context, fiberContext, flags)
+    const runtime = new FiberRuntime(effect, id, options)
     runtime.addObserver(f)
     runtime.start()
     return runtime
@@ -31,24 +36,22 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
 
   static runPromiseExit<R, E, A>(
     effect: Effect<R, E, A>,
-    context: Context<R>,
-    fiberContext: FiberContext = FiberContext(),
-    flags: FiberRuntimeFlags = FiberRuntimeFlags(),
+    id: FiberId,
+    options: FiberRuntimeOptions<R>,
   ): Promise<Exit<E, A>> {
     return new Promise((resolve) => {
-      FiberRuntime.runWith(effect, context, fiberContext, flags, resolve)
+      FiberRuntime.runWith(effect, id, options, resolve)
     })
   }
 
   static runPromise<R, E, A>(
     effect: Effect<R, E, A>,
-    context: Context<R>,
-    fiberContext: FiberContext = FiberContext(),
-    flags: FiberRuntimeFlags = FiberRuntimeFlags(),
+    id: FiberId,
+    options: FiberRuntimeOptions<R>,
   ): Promise<A> {
     return new Promise((resolve, reject) => {
-      FiberRuntime.runWith(effect, context, fiberContext, flags, (exit) => {
-        Either.isRight(exit) ? resolve(exit.right) : reject(exit.left)
+      FiberRuntime.runWith(effect, id, options, (exit) => {
+        Either.isRight(exit) ? resolve(exit.right) : reject(new Cause.CauseError(exit.left))
       })
     })
   }
@@ -59,21 +62,20 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
   protected disposable: Disposable.Settable = Disposable.settable()
   protected observers: ((exit: Exit<Errors, Output>) => void)[] = []
   protected interruptedBy: FiberId[] = []
-  protected interruptStatus = this.flags.interruptStatus
-  protected currentContext: [Context<any>, ...Context<any>[]] = [this.context]
+  protected interruptStatus = this.options.flags.interruptStatus
+  protected currentContext: [Context<any>, ...Context<any>[]] = [this.options.context]
   protected currentContextIndex = 0
+  protected currentFiberRefs: [FiberRefs, ...FiberRefs[]] = [this.options.fiberRefs]
+  protected currentFiberRefsIndex = 0
   protected fiberStatus: FiberStatus.FiberStatus<Errors, Output> = FiberStatus.Pending
 
   constructor(
     readonly effect: Effect<Services, Errors, Output>,
-    readonly context: Context<Services>,
-    readonly fiberContext: FiberContext,
-    readonly flags: FiberRuntimeFlags,
+    readonly id: FiberId,
+    readonly options: FiberRuntimeOptions<Services>,
   ) {
     this.setInstr(effect)
   }
-
-  readonly id: Fiber<Errors, Output>['id'] = this.fiberContext.id
 
   readonly exit: Fiber<Errors, Output>['exit'] = new I.Lazy(() => {
     if (this.fiberStatus.tag === 'Done') {
@@ -192,13 +194,20 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
     this.setInstr(effect)
   }
 
-  protected AccessFiberContext(instr: I.AccessFiberContext<any, any, any>) {
-    this.addTrace(instr.__trace)
-    this.setInstr(instr.input(this.fiberContext))
-  }
-
   protected GetRuntimeFlags() {
     this.continueWith(this.getFiberRuntimeFlags())
+  }
+
+  protected GetFiberRefs() {
+    this.continueWith(this.getCurrentFiberRefs())
+  }
+
+  protected WithFiberRefs(instr: I.WithFiberRefs<any, any, any>) {
+    const [effect, refs] = instr.input
+    this.currentFiberRefs.push(refs)
+    this.currentFiberRefsIndex++
+    this.frames.push(new PopFrame(() => this.popFiberRefs(), instr.__trace))
+    this.setInstr(effect)
   }
 
   protected SetInterruptStatus(instr: I.SetInterruptStatus<any, any, any>) {
@@ -349,15 +358,26 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
     }
   }
 
+  protected getCurrentFiberRefs(): FiberRefs {
+    return this.currentFiberRefs[this.currentFiberRefsIndex]
+  }
+
+  protected popFiberRefs() {
+    if (this.currentFiberRefs.length > 1) {
+      this.currentFiberRefs.pop()
+      this.currentFiberRefsIndex--
+    }
+  }
+
   protected addTrace(trace?: string) {
-    if (this.flags.shouldTrace && trace) {
+    if (this.options.flags.shouldTrace && trace) {
       this.frames.push(new TraceFrame(trace))
     }
   }
 
   protected getFiberRuntimeFlags(): FiberRuntimeFlags {
     return {
-      ...this.flags,
+      ...this.options.flags,
       interruptStatus: this.interruptStatus,
     }
   }

@@ -1,3 +1,4 @@
+import * as C from '@fp-ts/data/Context'
 import { Duration } from '@fp-ts/data/Duration'
 
 import { Time, UnixTime } from './Time.js'
@@ -9,6 +10,8 @@ export interface Clock {
   readonly getTime: (duration: Duration) => Time
   readonly getUnixTime: (duration: Duration) => UnixTime
 }
+
+export const Clock = C.Tag<Clock>()
 
 export function makeDateClock(): Clock {
   const startTime = Date.now()

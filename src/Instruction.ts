@@ -2,17 +2,16 @@ import { Context } from '@fp-ts/data/Context'
 
 import type { Cause } from './Cause.js'
 import type { Effect } from './Effect.js'
-import type { FiberContext } from './FiberContext.js'
-import { FiberRuntimeFlags } from './FiberRuntimeFlags.js'
+import type { FiberRefs } from './FiberRefs.js'
+import type { FiberRuntimeFlags } from './FiberRuntimeFlags.js'
 import type { Future } from './Future.js'
 
 // TODO: Fusion of frames
-// TODO: FiberRefs
 // TODO: Fork
+// TODO: Set runtime flags
 
 export type Instruction<R, E, A> =
   | AccessContext<R, R, E, A>
-  | AccessFiberContext<R, E, A>
   | Async<R, E, A>
   | FlatMap<R, E, any, R, E, A>
   | FlatMapCause<R, any, A, R, E, A>
@@ -25,7 +24,7 @@ export type Instruction<R, E, A> =
   | Of<A>
   | ProvideContext<any, E, A>
   | SetInterruptStatus<R, E, A>
-  | GetRuntimeFlags
+  | WithFiberRefs<R, E, A>
 
 abstract class Instr<I, R, E, A> implements Effect<R, E, A> {
   readonly _R!: (_: never) => R
@@ -55,15 +54,6 @@ export class ProvideContext<R, E, A> extends Instr<
   A
 > {
   readonly tag = 'ProvideContext'
-}
-
-export class AccessFiberContext<R, E, A> extends Instr<
-  (r: FiberContext) => Effect<R, E, A>,
-  R,
-  E,
-  A
-> {
-  readonly tag = 'AccessFiberContext'
 }
 
 export class FromCause<E> extends Instr<Cause<E>, never, E, never> {
@@ -135,6 +125,14 @@ export class SetInterruptStatus<R, E, A> extends Instr<
   readonly tag = 'SetInterruptStatus'
 }
 
-export class GetRuntimeFlags extends Instr<never, never, never, FiberRuntimeFlags> {
+export class GetRuntimeFlags extends Instr<void, never, never, FiberRuntimeFlags> {
   readonly tag = 'GetRuntimeFlags'
+}
+
+export class GetFiberRefs extends Instr<void, never, never, FiberRefs> {
+  readonly tag = 'GetFiberRefs'
+}
+
+export class WithFiberRefs<R, E, A> extends Instr<readonly [Effect<R, E, A>, FiberRefs], R, E, A> {
+  readonly tag = 'WithFiberRefs'
 }
