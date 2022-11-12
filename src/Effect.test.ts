@@ -1,6 +1,5 @@
 import { deepStrictEqual } from 'assert'
 
-import * as C from '@fp-ts/data/Context'
 import { left } from '@fp-ts/data/Either'
 import { pipe } from 'node_modules/@fp-ts/data/Function.js'
 
@@ -22,9 +21,7 @@ describe(import.meta.url, () => {
     it('lifts a Cause into an Effect context', async () => {
       const value = Math.random()
       const cause = new Expected(value)
-      const exit = await runMainExit(Effect.fromCause(cause), {
-        context: C.empty(),
-      })
+      const exit = await runMainExit(Effect.fromCause(cause))
 
       deepStrictEqual(exit, left(cause))
     })

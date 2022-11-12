@@ -150,6 +150,7 @@ export function interruptible<R, E, A>(eff: Effect<R, E, A>): Effect<R, E, A> {
 }
 
 export const getFiberRefs: Effect<never, never, FiberRefs> = new I.GetFiberRefs()
+
 export const getRuntimeFlags: Effect<never, never, FiberRuntimeFlags> = new I.GetRuntimeFlags()
 
 export const getFiberRef = <R, E, A>(ref: FiberRef<R, E, A>): Effect<R, E, A> =>

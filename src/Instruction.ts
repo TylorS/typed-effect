@@ -9,6 +9,9 @@ import type { Future } from './Future.js'
 // TODO: Fusion of frames
 // TODO: Fork
 // TODO: Set runtime flags
+// TODO: FiberScope + Cancelation
+// TODO: Scope
+// TODO: Semaphores
 
 export type Instruction<R, E, A> =
   | AccessContext<R, R, E, A>
