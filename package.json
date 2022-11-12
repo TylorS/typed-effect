@@ -1,0 +1,626 @@
+{
+  "name": "@typed/effect",
+  "version": "0.0.0",
+  "description": "High-performance Asynchronous Effects",
+  "type": "module",
+  "main": "esm/index.js",
+  "types": "esm/index.d.ts",
+  "typings": "esm/index.d.ts",
+  "sideEffects": false,
+  "scripts": {
+    "build:cjs": "rm -rf cjs && tsc -p ./tsconfig.build.cjs.json",
+    "build:esm": "rm -rf esm && tsc -p ./tsconfig.build.esm.json",
+    "build:package-exports": "tsx ./tools/generatePackageExports.ts",
+    "build": "concurrently npm:build:esm npm:build:cjs && npm run build:package-exports",
+    "eslint": "NODE_OPTIONS=--max-old-space-size=4096 eslint --ext .ts,.js,.json,.yaml --fix --cache src",
+    "mocha": "mocha 'src/**/*.test.ts'",
+    "coverage": "c8 --include 'src/**/*' --all npm run mocha",
+    "typecheck": "NODE_OPTIONS=--max-old-space-size=4096 tsc --noEmit -p ./tsconfig.build.esm.json",
+    "test": "npm run mocha && concurrently npm:eslint npm:typecheck",
+    "preversion": "npm test",
+    "postversion": "npm run build && npm publish --access=public",
+    "prepare": "ts-patch install -s",
+    "perf": "node --loader @esbuild-kit/esm-loader perf/runFullSuite.ts",
+    "perf:filter-map-reduce": "npm run perfTest filter-map-reduce",
+    "perf:flatMap": "npm run perfTest flatMap",
+    "perf:switchMap": "npm run perfTest switchMap",
+    "perfTest": "node --loader @esbuild-kit/esm-loader perf/runPerfTest.ts"
+  },
+  "keywords": [
+    "Fx",
+    "Async",
+    "Dependency Injection",
+    "fp-ts"
+  ],
+  "author": "Tylor Steinberger (tlsteinberger167@gmail.com)",
+  "license": "MIT",
+  "dependencies": {
+    "@fp-ts/core": "^0.0.8",
+    "@fp-ts/data": "^0.0.9"
+  },
+  "peerDependencies": {
+    "tslib": "^2.4.0",
+    "typescript": "^4.7.4"
+  },
+  "optionalPeerDependencies": {},
+  "devDependencies": {
+    "@esbuild-kit/esm-loader": "^2.4.2",
+    "@most/core": "^1.6.1",
+    "@most/scheduler": "^1.3.0",
+    "@most/types": "^1.1.0",
+    "@types/benchmark": "^2.1.2",
+    "@types/mocha": "^9.1.1",
+    "@types/node": "^17.0.45",
+    "@types/prettier": "^2.7.0",
+    "@types/yargs": "^17.0.13",
+    "@typescript-eslint/eslint-plugin": "^5.34.0",
+    "@typescript-eslint/parser": "^5.34.0",
+    "@zoltu/typescript-transformer-append-js-extension": "^1.0.1",
+    "benchmark": "^2.1.4",
+    "c8": "^7.12.0",
+    "concurrently": "^7.3.0",
+    "eslint": "^8.22.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-import-resolver-typescript": "^2.7.1",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "fast-check": "^3.1.1",
+    "fast-glob": "^3.2.11",
+    "husky": "^8.0.1",
+    "lint-staged": "^12.5.0",
+    "mocha": "^10.0.0",
+    "prettier": "^2.7.1",
+    "rxjs": "^7.5.7",
+    "source-map-support": "^0.5.21",
+    "ts-patch": "^2.0.2",
+    "tsconfig-paths": "^4.1.0",
+    "tsconfig-replace-paths": "^0.0.11",
+    "tslib": "^2.4.0",
+    "tsx": "^3.8.2",
+    "typescript": "^4.7.4",
+    "typescript-transform-paths": "^3.3.1",
+    "yargs": "^17.6.0"
+  },
+  "exports": {
+    ".": {
+      "require": {
+        "default": "./cjs/index.js",
+        "types": "./cjs/index.d.ts"
+      },
+      "import": {
+        "default": "./esm/index.js",
+        "types": "./esm/index.d.ts"
+      }
+    },
+    "./Fx": {
+      "require": {
+        "default": "./cjs/Fx.js",
+        "types": "./cjs/Fx.d.ts"
+      },
+      "import": {
+        "default": "./esm/Fx.js",
+        "types": "./esm/Fx.d.ts"
+      }
+    },
+    "./Subject": {
+      "require": {
+        "default": "./cjs/Subject.js",
+        "types": "./cjs/Subject.d.ts"
+      },
+      "import": {
+        "default": "./esm/Subject.js",
+        "types": "./esm/Subject.d.ts"
+      }
+    },
+    "./_internal": {
+      "require": {
+        "default": "./cjs/_internal.js",
+        "types": "./cjs/_internal.d.ts"
+      },
+      "import": {
+        "default": "./esm/_internal.js",
+        "types": "./esm/_internal.d.ts"
+      }
+    },
+    "./combine": {
+      "require": {
+        "default": "./cjs/combine.js",
+        "types": "./cjs/combine.d.ts"
+      },
+      "import": {
+        "default": "./esm/combine.js",
+        "types": "./esm/combine.d.ts"
+      }
+    },
+    "./continueWith": {
+      "require": {
+        "default": "./cjs/continueWith.js",
+        "types": "./cjs/continueWith.d.ts"
+      },
+      "import": {
+        "default": "./esm/continueWith.js",
+        "types": "./esm/continueWith.d.ts"
+      }
+    },
+    "./debounce": {
+      "require": {
+        "default": "./cjs/debounce.js",
+        "types": "./cjs/debounce.d.ts"
+      },
+      "import": {
+        "default": "./esm/debounce.js",
+        "types": "./esm/debounce.d.ts"
+      }
+    },
+    "./delay": {
+      "require": {
+        "default": "./cjs/delay.js",
+        "types": "./cjs/delay.d.ts"
+      },
+      "import": {
+        "default": "./esm/delay.js",
+        "types": "./esm/delay.d.ts"
+      }
+    },
+    "./during": {
+      "require": {
+        "default": "./cjs/during.js",
+        "types": "./cjs/during.d.ts"
+      },
+      "import": {
+        "default": "./esm/during.js",
+        "types": "./esm/during.d.ts"
+      }
+    },
+    "./exhaustMap": {
+      "require": {
+        "default": "./cjs/exhaustMap.js",
+        "types": "./cjs/exhaustMap.d.ts"
+      },
+      "import": {
+        "default": "./esm/exhaustMap.js",
+        "types": "./esm/exhaustMap.d.ts"
+      }
+    },
+    "./exhaustMapLatest": {
+      "require": {
+        "default": "./cjs/exhaustMapLatest.js",
+        "types": "./cjs/exhaustMapLatest.d.ts"
+      },
+      "import": {
+        "default": "./esm/exhaustMapLatest.js",
+        "types": "./esm/exhaustMapLatest.d.ts"
+      }
+    },
+    "./exhaustMapList": {
+      "require": {
+        "default": "./cjs/exhaustMapList.js",
+        "types": "./cjs/exhaustMapList.d.ts"
+      },
+      "import": {
+        "default": "./esm/exhaustMapList.js",
+        "types": "./esm/exhaustMapList.d.ts"
+      }
+    },
+    "./filterLoop": {
+      "require": {
+        "default": "./cjs/filterLoop.js",
+        "types": "./cjs/filterLoop.d.ts"
+      },
+      "import": {
+        "default": "./esm/filterLoop.js",
+        "types": "./esm/filterLoop.d.ts"
+      }
+    },
+    "./filterMap": {
+      "require": {
+        "default": "./cjs/filterMap.js",
+        "types": "./cjs/filterMap.d.ts"
+      },
+      "import": {
+        "default": "./esm/filterMap.js",
+        "types": "./esm/filterMap.d.ts"
+      }
+    },
+    "./flatMap": {
+      "require": {
+        "default": "./cjs/flatMap.js",
+        "types": "./cjs/flatMap.d.ts"
+      },
+      "import": {
+        "default": "./esm/flatMap.js",
+        "types": "./esm/flatMap.d.ts"
+      }
+    },
+    "./flatMapConcurrently": {
+      "require": {
+        "default": "./cjs/flatMapConcurrently.js",
+        "types": "./cjs/flatMapConcurrently.d.ts"
+      },
+      "import": {
+        "default": "./esm/flatMapConcurrently.js",
+        "types": "./esm/flatMapConcurrently.d.ts"
+      }
+    },
+    "./fromDequeue": {
+      "require": {
+        "default": "./cjs/fromDequeue.js",
+        "types": "./cjs/fromDequeue.d.ts"
+      },
+      "import": {
+        "default": "./esm/fromDequeue.js",
+        "types": "./esm/fromDequeue.d.ts"
+      }
+    },
+    "./fromEffect": {
+      "require": {
+        "default": "./cjs/fromEffect.js",
+        "types": "./cjs/fromEffect.d.ts"
+      },
+      "import": {
+        "default": "./esm/fromEffect.js",
+        "types": "./esm/fromEffect.d.ts"
+      }
+    },
+    "./fromFxEffect": {
+      "require": {
+        "default": "./cjs/fromFxEffect.js",
+        "types": "./cjs/fromFxEffect.d.ts"
+      },
+      "import": {
+        "default": "./esm/fromFxEffect.js",
+        "types": "./esm/fromFxEffect.d.ts"
+      }
+    },
+    "./fromHub": {
+      "require": {
+        "default": "./cjs/fromHub.js",
+        "types": "./cjs/fromHub.d.ts"
+      },
+      "import": {
+        "default": "./esm/fromHub.js",
+        "types": "./esm/fromHub.d.ts"
+      }
+    },
+    "./fromIterable": {
+      "require": {
+        "default": "./cjs/fromIterable.js",
+        "types": "./cjs/fromIterable.d.ts"
+      },
+      "import": {
+        "default": "./esm/fromIterable.js",
+        "types": "./esm/fromIterable.d.ts"
+      }
+    },
+    "./hold": {
+      "require": {
+        "default": "./cjs/hold.js",
+        "types": "./cjs/hold.d.ts"
+      },
+      "import": {
+        "default": "./esm/hold.js",
+        "types": "./esm/hold.d.ts"
+      }
+    },
+    "./mapCause": {
+      "require": {
+        "default": "./cjs/mapCause.js",
+        "types": "./cjs/mapCause.d.ts"
+      },
+      "import": {
+        "default": "./esm/mapCause.js",
+        "types": "./esm/mapCause.d.ts"
+      }
+    },
+    "./mapEffect": {
+      "require": {
+        "default": "./cjs/mapEffect.js",
+        "types": "./cjs/mapEffect.d.ts"
+      },
+      "import": {
+        "default": "./esm/mapEffect.js",
+        "types": "./esm/mapEffect.d.ts"
+      }
+    },
+    "./merge": {
+      "require": {
+        "default": "./cjs/merge.js",
+        "types": "./cjs/merge.d.ts"
+      },
+      "import": {
+        "default": "./esm/merge.js",
+        "types": "./esm/merge.d.ts"
+      }
+    },
+    "./multicast": {
+      "require": {
+        "default": "./cjs/multicast.js",
+        "types": "./cjs/multicast.d.ts"
+      },
+      "import": {
+        "default": "./esm/multicast.js",
+        "types": "./esm/multicast.d.ts"
+      }
+    },
+    "./on": {
+      "require": {
+        "default": "./cjs/on.js",
+        "types": "./cjs/on.d.ts"
+      },
+      "import": {
+        "default": "./esm/on.js",
+        "types": "./esm/on.d.ts"
+      }
+    },
+    "./orElse": {
+      "require": {
+        "default": "./cjs/orElse.js",
+        "types": "./cjs/orElse.d.ts"
+      },
+      "import": {
+        "default": "./esm/orElse.js",
+        "types": "./esm/orElse.d.ts"
+      }
+    },
+    "./periodic": {
+      "require": {
+        "default": "./cjs/periodic.js",
+        "types": "./cjs/periodic.d.ts"
+      },
+      "import": {
+        "default": "./esm/periodic.js",
+        "types": "./esm/periodic.d.ts"
+      }
+    },
+    "./provide": {
+      "require": {
+        "default": "./cjs/provide.js",
+        "types": "./cjs/provide.d.ts"
+      },
+      "import": {
+        "default": "./esm/provide.js",
+        "types": "./esm/provide.d.ts"
+      }
+    },
+    "./runCollect": {
+      "require": {
+        "default": "./cjs/runCollect.js",
+        "types": "./cjs/runCollect.d.ts"
+      },
+      "import": {
+        "default": "./esm/runCollect.js",
+        "types": "./esm/runCollect.d.ts"
+      }
+    },
+    "./runDrain": {
+      "require": {
+        "default": "./cjs/runDrain.js",
+        "types": "./cjs/runDrain.d.ts"
+      },
+      "import": {
+        "default": "./esm/runDrain.js",
+        "types": "./esm/runDrain.d.ts"
+      }
+    },
+    "./runObserve": {
+      "require": {
+        "default": "./cjs/runObserve.js",
+        "types": "./cjs/runObserve.d.ts"
+      },
+      "import": {
+        "default": "./esm/runObserve.js",
+        "types": "./esm/runObserve.d.ts"
+      }
+    },
+    "./runReduce": {
+      "require": {
+        "default": "./cjs/runReduce.js",
+        "types": "./cjs/runReduce.d.ts"
+      },
+      "import": {
+        "default": "./esm/runReduce.js",
+        "types": "./esm/runReduce.d.ts"
+      }
+    },
+    "./scanEffect": {
+      "require": {
+        "default": "./cjs/scanEffect.js",
+        "types": "./cjs/scanEffect.d.ts"
+      },
+      "import": {
+        "default": "./esm/scanEffect.js",
+        "types": "./esm/scanEffect.d.ts"
+      }
+    },
+    "./scheduled": {
+      "require": {
+        "default": "./cjs/scheduled.js",
+        "types": "./cjs/scheduled.d.ts"
+      },
+      "import": {
+        "default": "./esm/scheduled.js",
+        "types": "./esm/scheduled.d.ts"
+      }
+    },
+    "./since": {
+      "require": {
+        "default": "./cjs/since.js",
+        "types": "./cjs/since.d.ts"
+      },
+      "import": {
+        "default": "./esm/since.js",
+        "types": "./esm/since.d.ts"
+      }
+    },
+    "./skipRepeats": {
+      "require": {
+        "default": "./cjs/skipRepeats.js",
+        "types": "./cjs/skipRepeats.d.ts"
+      },
+      "import": {
+        "default": "./esm/skipRepeats.js",
+        "types": "./esm/skipRepeats.d.ts"
+      }
+    },
+    "./skipWhile": {
+      "require": {
+        "default": "./cjs/skipWhile.js",
+        "types": "./cjs/skipWhile.d.ts"
+      },
+      "import": {
+        "default": "./esm/skipWhile.js",
+        "types": "./esm/skipWhile.d.ts"
+      }
+    },
+    "./slice": {
+      "require": {
+        "default": "./cjs/slice.js",
+        "types": "./cjs/slice.d.ts"
+      },
+      "import": {
+        "default": "./esm/slice.js",
+        "types": "./esm/slice.d.ts"
+      }
+    },
+    "./snapshot": {
+      "require": {
+        "default": "./cjs/snapshot.js",
+        "types": "./cjs/snapshot.d.ts"
+      },
+      "import": {
+        "default": "./esm/snapshot.js",
+        "types": "./esm/snapshot.d.ts"
+      }
+    },
+    "./struct": {
+      "require": {
+        "default": "./cjs/struct.js",
+        "types": "./cjs/struct.d.ts"
+      },
+      "import": {
+        "default": "./esm/struct.js",
+        "types": "./esm/struct.d.ts"
+      }
+    },
+    "./suspendSucceed": {
+      "require": {
+        "default": "./cjs/suspendSucceed.js",
+        "types": "./cjs/suspendSucceed.d.ts"
+      },
+      "import": {
+        "default": "./esm/suspendSucceed.js",
+        "types": "./esm/suspendSucceed.d.ts"
+      }
+    },
+    "./switchMap": {
+      "require": {
+        "default": "./cjs/switchMap.js",
+        "types": "./cjs/switchMap.d.ts"
+      },
+      "import": {
+        "default": "./esm/switchMap.js",
+        "types": "./esm/switchMap.d.ts"
+      }
+    },
+    "./takeWhile": {
+      "require": {
+        "default": "./cjs/takeWhile.js",
+        "types": "./cjs/takeWhile.d.ts"
+      },
+      "import": {
+        "default": "./esm/takeWhile.js",
+        "types": "./esm/takeWhile.d.ts"
+      }
+    },
+    "./tapEffect": {
+      "require": {
+        "default": "./cjs/tapEffect.js",
+        "types": "./cjs/tapEffect.d.ts"
+      },
+      "import": {
+        "default": "./esm/tapEffect.js",
+        "types": "./esm/tapEffect.d.ts"
+      }
+    },
+    "./throttle": {
+      "require": {
+        "default": "./cjs/throttle.js",
+        "types": "./cjs/throttle.d.ts"
+      },
+      "import": {
+        "default": "./esm/throttle.js",
+        "types": "./esm/throttle.d.ts"
+      }
+    },
+    "./toEnqueue": {
+      "require": {
+        "default": "./cjs/toEnqueue.js",
+        "types": "./cjs/toEnqueue.d.ts"
+      },
+      "import": {
+        "default": "./esm/toEnqueue.js",
+        "types": "./esm/toEnqueue.d.ts"
+      }
+    },
+    "./toStream": {
+      "require": {
+        "default": "./cjs/toStream.js",
+        "types": "./cjs/toStream.d.ts"
+      },
+      "import": {
+        "default": "./esm/toStream.js",
+        "types": "./esm/toStream.d.ts"
+      }
+    },
+    "./transform": {
+      "require": {
+        "default": "./cjs/transform.js",
+        "types": "./cjs/transform.d.ts"
+      },
+      "import": {
+        "default": "./esm/transform.js",
+        "types": "./esm/transform.d.ts"
+      }
+    },
+    "./until": {
+      "require": {
+        "default": "./cjs/until.js",
+        "types": "./cjs/until.d.ts"
+      },
+      "import": {
+        "default": "./esm/until.js",
+        "types": "./esm/until.d.ts"
+      }
+    },
+    "./withEmitter": {
+      "require": {
+        "default": "./cjs/withEmitter.js",
+        "types": "./cjs/withEmitter.d.ts"
+      },
+      "import": {
+        "default": "./esm/withEmitter.js",
+        "types": "./esm/withEmitter.d.ts"
+      }
+    },
+    "./zip": {
+      "require": {
+        "default": "./cjs/zip.js",
+        "types": "./cjs/zip.d.ts"
+      },
+      "import": {
+        "default": "./esm/zip.js",
+        "types": "./esm/zip.d.ts"
+      }
+    },
+    "./zipIterable": {
+      "require": {
+        "default": "./cjs/zipIterable.js",
+        "types": "./cjs/zipIterable.d.ts"
+      },
+      "import": {
+        "default": "./esm/zipIterable.js",
+        "types": "./esm/zipIterable.d.ts"
+      }
+    }
+  }
+}
