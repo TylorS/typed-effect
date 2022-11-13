@@ -9,7 +9,6 @@ import { FiberRuntimeFlags } from './FiberRuntimeFlags.js'
 import { Layer } from './Layer.js'
 import { Runtime } from './Runtime.js'
 import { Scheduler } from './Scheduler.js'
-import { Timer } from './Timer.js'
 
 export function provideService<S>(tag: Context.Tag<S>, service: S) {
   const addService = Context.add(tag)(service)
@@ -63,23 +62,13 @@ export const {
   runPromiseExit: runMainExit,
 } = DefaultRuntime
 
-export const getClock: Effect.Effect<never, never, Clock> = pipe(
-  DefaultServices,
-  Effect.getFiberRef,
-  Effect.map(Context.get(Clock)),
-)
-
-export const getTimer: Effect.Effect<never, never, Timer> = pipe(
-  DefaultServices,
-  Effect.getFiberRef,
-  Effect.map(Context.get(Timer)),
-)
-
 export const getScheduler: Effect.Effect<never, never, Scheduler> = pipe(
   DefaultServices,
   Effect.getFiberRef,
   Effect.map(Context.get(Scheduler)),
 )
+
+export const getClock: Effect.Effect<never, never, Clock> = getScheduler
 
 export const context = <R>(): Effect.Effect<R, never, Context.Context<R>> =>
   Effect.access(Effect.of)

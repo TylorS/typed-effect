@@ -75,9 +75,7 @@ export const TestServices: Layer<never, never, TestServices | DefaultServices> =
 
     return pipe(
       Context.empty(),
-      Context.add(Clock)(clock),
       Context.add(TestClock)(clock),
-      Context.add(Timer)(timer),
       Context.add(TestTimer)(timer),
       Context.add(Scheduler)(scheduler),
       Context.add(TestScheduler)(scheduler),

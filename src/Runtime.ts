@@ -4,12 +4,12 @@ import { pipe } from '@fp-ts/data/Function'
 import * as Option from '@fp-ts/data/Option'
 
 import { CauseError } from './Cause.js'
-import { Clock } from './Clock.js'
 import { DefaultEnv, DefaultServices, IdGenerator } from './DefaultServices.js'
 import * as Effect from './Effect.js'
 import { Exit } from './Exit.js'
 import { FiberId } from './FiberId.js'
 import { FiberRuntime, FiberRuntimeOptions } from './FiberRuntime.js'
+import { Scheduler } from './Scheduler.js'
 
 export interface Runtime<R> {
   readonly runWith: <E, A>(
@@ -28,9 +28,9 @@ export interface Runtime<R> {
 }
 
 export function Runtime<R>(options: FiberRuntimeOptions<R>): Runtime<R> {
-  const clock = getDefaultService(options, Clock)
+  const scheduler = getDefaultService(options, Scheduler)
   const makeNextId = getDefaultService(options, IdGenerator)
-  const makeNextFiberId = () => FiberId(makeNextId(), clock.currentTime())
+  const makeNextFiberId = () => FiberId(makeNextId(), scheduler.currentTime())
   const makeOptions = (overrides?: Partial<FiberRuntimeOptions<R>>): FiberRuntimeOptions<R> => ({
     ...options,
     ...overrides,
