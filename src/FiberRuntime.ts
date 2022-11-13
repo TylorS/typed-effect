@@ -12,8 +12,20 @@ import type { FiberId } from './FiberId.js'
 import type { FiberRefs } from './FiberRefs.js'
 import type { FiberRuntimeFlags } from './FiberRuntimeFlags.js'
 import * as FiberStatus from './FiberStatus.js'
+import {
+  FlatMapCauseFrame,
+  FlatMapFrame,
+  Frame,
+  InterruptFrame,
+  MapCauseFrame,
+  MapFrame,
+  MatchFrame,
+  PopFrame,
+  TraceFrame,
+} from './Frame.js'
 import { pending } from './Future.js'
 import * as I from './Instruction.js'
+import { MutableStack } from './_internal.js'
 
 export interface FiberRuntimeOptions<R> {
   readonly context: Context<R>
@@ -22,40 +34,6 @@ export interface FiberRuntimeOptions<R> {
 }
 
 export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Output> {
-  static runWith<R, E, A>(
-    effect: Effect<R, E, A>,
-    id: FiberId,
-    options: FiberRuntimeOptions<R>,
-    f: (exit: Exit<E, A>) => void,
-  ) {
-    const runtime = new FiberRuntime(effect, id, options)
-    runtime.addObserver(f)
-    runtime.start()
-    return runtime
-  }
-
-  static runPromiseExit<R, E, A>(
-    effect: Effect<R, E, A>,
-    id: FiberId,
-    options: FiberRuntimeOptions<R>,
-  ): Promise<Exit<E, A>> {
-    return new Promise((resolve) => {
-      FiberRuntime.runWith(effect, id, options, resolve)
-    })
-  }
-
-  static runPromise<R, E, A>(
-    effect: Effect<R, E, A>,
-    id: FiberId,
-    options: FiberRuntimeOptions<R>,
-  ): Promise<A> {
-    return new Promise((resolve, reject) => {
-      FiberRuntime.runWith(effect, id, options, (exit) => {
-        Either.isRight(exit) ? resolve(exit.right) : reject(new Cause.CauseError(exit.left))
-      })
-    })
-  }
-
   protected started = false
   protected instr!: I.Instruction<any, any, any> | null
   protected frames: Frame[] = []
@@ -63,10 +41,8 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
   protected observers: ((exit: Exit<Errors, Output>) => void)[] = []
   protected interruptedBy: FiberId[] = []
   protected interruptStatus = this.options.flags.interruptStatus
-  protected currentContext: [Context<any>, ...Context<any>[]] = [this.options.context]
-  protected currentContextIndex = 0
-  protected currentFiberRefs: [FiberRefs, ...FiberRefs[]] = [this.options.fiberRefs]
-  protected currentFiberRefsIndex = 0
+  protected currentContext = new MutableStack(this.options.context)
+  protected currentFiberRefs = new MutableStack(this.options.fiberRefs)
   protected fiberStatus: FiberStatus.FiberStatus<Errors, Output> = FiberStatus.Pending
 
   constructor(
@@ -183,14 +159,13 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
 
   protected AccessContext(instr: I.AccessContext<any, any, any, any>) {
     this.addTrace(instr.__trace)
-    this.setInstr(instr.input(this.getCurrentContext()))
+    this.setInstr(instr.input(this.currentContext.current))
   }
 
   protected ProvideContext(instr: I.ProvideContext<any, any, any>) {
     const [effect, ctx] = instr.input
     this.currentContext.push(ctx)
-    this.currentContextIndex++
-    this.frames.push(new PopFrame(() => this.popContext(), instr.__trace))
+    this.frames.push(new PopFrame(() => this.currentContext.pop(), instr.__trace))
     this.setInstr(effect)
   }
 
@@ -199,28 +174,29 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
   }
 
   protected GetFiberRefs() {
-    this.continueWith(this.getCurrentFiberRefs())
+    this.continueWith(this.currentFiberRefs.current)
   }
 
   protected WithFiberRefs(instr: I.WithFiberRefs<any, any, any>) {
     const [effect, refs] = instr.input
     this.currentFiberRefs.push(refs)
-    this.currentFiberRefsIndex++
-    this.frames.push(new PopFrame(() => this.popFiberRefs(), instr.__trace))
+    this.frames.push(new PopFrame(() => this.currentFiberRefs.pop(), instr.__trace))
     this.setInstr(effect)
   }
 
   protected SetInterruptStatus(instr: I.SetInterruptStatus<any, any, any>) {
     this.addTrace(instr.__trace)
+    const currentStatus = this.interruptStatus
     const [effect, status] = instr.input
 
     // If currently interruptable, mark this spot in the stack to check for
     // interrupters of this fiber
-    if (this.interruptStatus) {
+    if (currentStatus) {
       this.frames.push(new InterruptFrame(instr.__trace))
     }
 
     this.interruptStatus = status
+    this.frames.push(new PopFrame(() => currentStatus))
     this.setInstr(effect)
   }
 
@@ -347,28 +323,6 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
     this.instr = effect as I.Instruction<any, any, any> | null
   }
 
-  protected getCurrentContext(): Context<any> {
-    return this.currentContext[this.currentContextIndex]
-  }
-
-  protected popContext() {
-    if (this.currentContext.length > 1) {
-      this.currentContext.pop()
-      this.currentContextIndex--
-    }
-  }
-
-  protected getCurrentFiberRefs(): FiberRefs {
-    return this.currentFiberRefs[this.currentFiberRefsIndex]
-  }
-
-  protected popFiberRefs() {
-    if (this.currentFiberRefs.length > 1) {
-      this.currentFiberRefs.pop()
-      this.currentFiberRefsIndex--
-    }
-  }
-
   protected addTrace(trace?: string) {
     if (this.options.flags.shouldTrace && trace) {
       this.frames.push(new TraceFrame(trace))
@@ -381,63 +335,4 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
       interruptStatus: this.interruptStatus,
     }
   }
-}
-
-export type Frame =
-  | MapFrame
-  | FlatMapFrame
-  | MapCauseFrame
-  | FlatMapCauseFrame
-  | MatchFrame
-  | InterruptFrame
-  | TraceFrame
-  | PopFrame
-
-export class MapFrame {
-  readonly tag = 'Map'
-  constructor(readonly f: (a: any) => any, readonly __trace?: string) {}
-}
-
-export class FlatMapFrame {
-  readonly tag = 'FlatMap'
-  constructor(readonly f: (a: any) => Effect<any, any, any>, readonly __trace?: string) {}
-}
-
-export class MapCauseFrame {
-  readonly tag = 'MapCause'
-  constructor(readonly f: (a: Cause.Cause<any>) => Cause.Cause<any>, readonly __trace?: string) {}
-}
-
-export class FlatMapCauseFrame {
-  readonly tag = 'FlatMapCause'
-  constructor(
-    readonly f: (a: Cause.Cause<any>) => Effect<any, any, any>,
-    readonly __trace?: string,
-  ) {}
-}
-
-export class MatchFrame {
-  readonly tag = 'Match'
-  constructor(
-    readonly f: (e: Cause.Cause<any>) => Effect<any, any, any>,
-    readonly g: (a: any) => Effect<any, any, any>,
-    readonly __trace?: string,
-  ) {}
-}
-
-export class InterruptFrame {
-  readonly tag = 'Interrupt'
-
-  constructor(readonly __trace?: string) {}
-}
-
-export class TraceFrame {
-  readonly tag = 'Trace'
-
-  constructor(readonly trace: string) {}
-}
-
-export class PopFrame {
-  readonly tag = 'Pop'
-  constructor(readonly f: () => void, readonly __trace?: string) {}
 }
