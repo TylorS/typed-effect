@@ -1,4 +1,7 @@
+import * as Semigroup from '@fp-ts/core/typeclass/Semigroup'
+
 import type { FiberId } from './FiberId.js'
+import { UnixTime } from './Time.js'
 
 export type Cause<E> =
   | Empty
@@ -21,17 +24,17 @@ export class Empty {
 
 export class Expected<E> {
   readonly tag = 'Expected'
-  constructor(readonly error: E) {}
+  constructor(readonly time: UnixTime, readonly error: E) {}
 }
 
 export class Unexpected {
   readonly tag = 'Unexpected'
-  constructor(readonly error: unknown) {}
+  constructor(readonly time: UnixTime, readonly error: unknown) {}
 }
 
 export class Interrupted {
   readonly tag = 'Interrupted'
-  constructor(readonly fiberId: FiberId) {}
+  constructor(readonly time: UnixTime, readonly fiberId: FiberId) {}
 }
 
 export class Sequential<E> {
@@ -48,4 +51,13 @@ export class Traced<E> {
   readonly tag = 'Traced'
   // TODO: Improve trace type
   constructor(readonly cause: Cause<E>, readonly trace: string) {}
+}
+
+export const combine =
+  <E2 = never>(y: Cause<E2>) =>
+  <E = never>(x: Cause<E>): Cause<E | E2> =>
+    x.tag === 'Empty' ? y : y.tag === 'Empty' ? x : new Sequential<E | E2>(x, y)
+
+export function makeSequentialSemigroup<E>(): Semigroup.Semigroup<Cause<E>> {
+  return Semigroup.fromCombine(combine)
 }

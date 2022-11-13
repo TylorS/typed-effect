@@ -1,16 +1,16 @@
 import { Context } from '@fp-ts/data/Context'
 import * as Either from '@fp-ts/data/Either'
 import { pipe } from '@fp-ts/data/Function'
-import * as RA from '@fp-ts/data/ReadonlyArray'
 
 import * as Cause from './Cause.js'
+import { getDefaultService } from './DefaultServices.js'
 import { Disposable } from './Disposable.js'
 import { Effect } from './Effect.js'
 import { Exit } from './Exit.js'
 import type { Fiber } from './Fiber.js'
 import type { FiberId } from './FiberId.js'
 import type { FiberRefs } from './FiberRefs.js'
-import type { FiberRuntimeFlags } from './FiberRuntimeFlags.js'
+import type { FiberScope } from './FiberScope.js'
 import * as FiberStatus from './FiberStatus.js'
 import {
   FlatMapCauseFrame,
@@ -25,12 +25,15 @@ import {
 } from './Frame.js'
 import { pending } from './Future.js'
 import * as I from './Instruction.js'
-import { MutableStack } from './_internal.js'
+import type { RuntimeFlags } from './RuntimeFlags.js'
+import { Scheduler } from './Scheduler.js'
+import { NonEmptyMutableStack } from './_internal.js'
 
-export interface FiberRuntimeOptions<R> {
+export interface RuntimeOptions<R> {
   readonly context: Context<R>
+  readonly scope: FiberScope
   readonly fiberRefs: FiberRefs
-  readonly flags: FiberRuntimeFlags
+  readonly flags: RuntimeFlags
 }
 
 export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Output> {
@@ -39,16 +42,17 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
   protected frames: Frame[] = []
   protected disposable: Disposable.Settable = Disposable.settable()
   protected observers: ((exit: Exit<Errors, Output>) => void)[] = []
-  protected interruptedBy: FiberId[] = []
-  protected interruptStatus = this.options.flags.interruptStatus
-  protected currentContext = new MutableStack(this.options.context)
-  protected currentFiberRefs = new MutableStack(this.options.fiberRefs)
+  protected interrupting = false
+  protected interruptCause: Cause.Cause<Errors> = new Cause.Empty()
+  protected currentContext = new NonEmptyMutableStack(this.options.context)
+  protected currentFiberRefs = new NonEmptyMutableStack(this.options.fiberRefs)
+  protected currentRuntimeFlags = new NonEmptyMutableStack(this.options.flags)
   protected fiberStatus: FiberStatus.FiberStatus<Errors, Output> = FiberStatus.Pending
 
   constructor(
     readonly effect: Effect<Services, Errors, Output>,
     readonly id: FiberId,
-    readonly options: FiberRuntimeOptions<Services>,
+    readonly options: RuntimeOptions<Services>,
   ) {
     this.setInstr(effect)
   }
@@ -77,6 +81,19 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
     })
   }
 
+  readonly interruptAs: Fiber<Errors, Output>['interruptAs'] = (id: FiberId) => {
+    this.interruptCause = pipe(
+      this.interruptCause,
+      Cause.combine(new Cause.Interrupted(this.getUnixTime(), id)),
+    )
+
+    if (this.currentRuntimeFlags.current.interruptStatus) {
+      this.continueWithCause(this.interruptCause)
+    }
+
+    return this.exit
+  }
+
   // Only public to users of FiberRuntime directly
   public start() {
     if (this.started) {
@@ -101,7 +118,7 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
       try {
         this.step(this.instr)
       } catch (e) {
-        this.continueWithCause(new Cause.Unexpected(e))
+        this.continueWithCause(new Cause.Unexpected(this.getUnixTime(), e))
       }
     }
 
@@ -169,8 +186,28 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
     this.setInstr(effect)
   }
 
+  protected GetFiberScope() {
+    this.continueWith(this.options.scope)
+  }
+
   protected GetRuntimeFlags() {
-    this.continueWith(this.getFiberRuntimeFlags())
+    this.continueWith(this.currentRuntimeFlags.current)
+  }
+
+  protected UpdateRuntimeFlags(instr: I.UpdateRuntimeFlags<any, any, any>) {
+    const [effect, f] = instr.input
+    const current = this.currentRuntimeFlags.current
+    const updated = f(current)
+
+    // If currently interruptable, mark this spot in the stack to check for
+    // interrupters of this fiber
+    if (current.interruptStatus && !updated.interruptStatus) {
+      this.frames.push(new InterruptFrame(instr.__trace))
+    }
+
+    this.currentRuntimeFlags.push(updated)
+    this.frames.push(new PopFrame(() => this.currentRuntimeFlags.pop(), instr.__trace))
+    this.setInstr(effect)
   }
 
   protected GetFiberRefs() {
@@ -184,20 +221,13 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
     this.setInstr(effect)
   }
 
-  protected SetInterruptStatus(instr: I.SetInterruptStatus<any, any, any>) {
-    this.addTrace(instr.__trace)
-    const currentStatus = this.interruptStatus
-    const [effect, status] = instr.input
-
-    // If currently interruptable, mark this spot in the stack to check for
-    // interrupters of this fiber
-    if (currentStatus) {
-      this.frames.push(new InterruptFrame(instr.__trace))
-    }
-
-    this.interruptStatus = status
-    this.frames.push(new PopFrame(() => currentStatus))
-    this.setInstr(effect)
+  protected GetRuntimeOptions() {
+    this.continueWith({
+      context: this.currentContext.current,
+      scope: this.options.scope,
+      fiberRefs: this.currentFiberRefs.current,
+      flags: this.currentRuntimeFlags.current,
+    })
   }
 
   // Frames
@@ -249,10 +279,8 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
       case 'Match':
         return this.setInstr(frame.g(value))
       case 'Interrupt': {
-        if (RA.isNonEmpty(this.interruptedBy)) {
-          return this.interruptNow(this.interruptedBy)
-        } else {
-          this.interruptStatus = true
+        if (this.shouldInterrupt()) {
+          return this.interruptNow()
         }
       }
     }
@@ -275,25 +303,13 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
       case 'MapCause':
         return this.continueWithCause(frame.f(cause))
       case 'Interrupt': {
-        if (RA.isNonEmpty(this.interruptedBy)) {
-          return this.interruptNow(this.interruptedBy)
-        } else {
-          this.interruptStatus = true
+        if (this.shouldInterrupt()) {
+          return this.interruptNow()
         }
       }
     }
 
     this.continueWithCause(cause)
-  }
-
-  protected interruptNow(interruptedBy: RA.NonEmptyReadonlyArray<FiberId>) {
-    this.continueWithCause(
-      pipe(
-        interruptedBy,
-        RA.mapNonEmpty((id) => new Cause.Interrupted(id)),
-        RA.reduce(new Cause.Empty() as Cause.Cause<Errors>, (l, r) => new Cause.Sequential(l, r)),
-      ),
-    )
   }
 
   // Status updates
@@ -311,6 +327,18 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
   }
 
   protected done(exit: Exit<Errors, Output>): void {
+    const { scope } = this.options
+
+    if (scope.size > 0) {
+      return this.setInstr(
+        new I.FlatMap([scope.interruptChildren, () => new I.Sync(() => this.complete(exit))]),
+      )
+    }
+
+    this.complete(exit)
+  }
+
+  protected complete(exit: Exit<Errors, Output>): void {
     this.instr = null
     this.disposable.dispose()
     this.observers.forEach((observer) => observer(exit))
@@ -329,10 +357,20 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
     }
   }
 
-  protected getFiberRuntimeFlags(): FiberRuntimeFlags {
-    return {
-      ...this.options.flags,
-      interruptStatus: this.interruptStatus,
-    }
+  protected getScheduler() {
+    return getDefaultService(this.currentContext.current, this.currentFiberRefs.current, Scheduler)
+  }
+
+  protected getUnixTime() {
+    return this.getScheduler().unixTime.get()
+  }
+
+  protected shouldInterrupt() {
+    return !this.interrupting && this.interruptCause.tag !== 'Empty'
+  }
+
+  protected interruptNow() {
+    this.interrupting = true
+    this.continueWithCause(this.interruptCause)
   }
 }

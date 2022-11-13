@@ -3,8 +3,10 @@ import { Duration } from '@fp-ts/data/Duration'
 import { pipe } from 'node_modules/@fp-ts/data/Function.js'
 
 import { Clock } from './Clock.js'
-import { DefaultServices, IdGenerator, makeIdGenerator } from './DefaultServices.js'
+import { DefaultServices } from './DefaultServices.js'
 import { sync } from './Effect.js'
+import { GlobalFiberScope, makeGlobalFiberScope } from './FiberScope.js'
+import { IdGenerator, makeIdGenerator } from './IdGenerator.js'
 import { Layer } from './Layer.js'
 import { Scheduler, makeScheduler } from './Scheduler.js'
 import { Time, UnixTime } from './Time.js'
@@ -22,10 +24,14 @@ export function makeTestClock(startTime: UnixTime = UnixTime(Date.now())): TestC
 
   return {
     startTime,
-    currentTime: () => Time(currentTime),
-    unixTime: () => UnixTime(startTime + currentTime),
-    getTime: (duration) => Time(currentTime + duration.millis),
-    getUnixTime: (duration) => UnixTime(startTime + currentTime + duration.millis),
+    time: {
+      get: () => Time(currentTime),
+      delay: (duration) => Time(currentTime + duration.millis),
+    },
+    unixTime: {
+      get: () => UnixTime(startTime + currentTime),
+      delay: (duration) => UnixTime(startTime + currentTime + duration.millis),
+    },
     progressTimeBy: (duration) => {
       currentTime += duration.millis
 
@@ -43,11 +49,11 @@ export function makeTestTimer(clock: TestClock): TestTimer {
 
   return {
     ...clock,
-    setTimer: (f, duration) => timeline.add(clock.getUnixTime(duration), f),
+    setTimer: (f, duration) => timeline.add(clock.unixTime.delay(duration), f),
     progressTimeBy: (duration) => {
       clock.progressTimeBy(duration)
-      const time = clock.currentTime()
-      timeline.getReadyTasks(clock.unixTime()).forEach((f) => f(time))
+      const time = clock.time.get()
+      timeline.getReadyTasks(UnixTime(clock.startTime + time)).forEach((f) => f(time))
       return time
     },
   }
@@ -64,7 +70,7 @@ export function makeTestScheduler(timer: TestTimer): TestScheduler {
   }
 }
 
-export type TestServices = TestClock | TestTimer | TestScheduler
+export type TestServices = TestScheduler
 
 export const TestServices: Layer<never, never, TestServices | DefaultServices> = Layer(
   'TestServices',
@@ -75,11 +81,10 @@ export const TestServices: Layer<never, never, TestServices | DefaultServices> =
 
     return pipe(
       Context.empty(),
-      Context.add(TestClock)(clock),
-      Context.add(TestTimer)(timer),
       Context.add(Scheduler)(scheduler),
       Context.add(TestScheduler)(scheduler),
       Context.add(IdGenerator)(makeIdGenerator()),
+      Context.add(GlobalFiberScope)(makeGlobalFiberScope()),
     )
   }),
 )

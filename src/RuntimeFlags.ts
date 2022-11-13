@@ -1,9 +1,9 @@
-export interface FiberRuntimeFlags {
+export interface RuntimeFlags {
   readonly interruptStatus: boolean
   readonly shouldTrace: boolean
 }
 
-export function FiberRuntimeFlags(overrides: Partial<FiberRuntimeFlags> = {}): FiberRuntimeFlags {
+export function RuntimeFlags(overrides: Partial<RuntimeFlags> = {}): RuntimeFlags {
   return {
     interruptStatus: true,
     shouldTrace: true,

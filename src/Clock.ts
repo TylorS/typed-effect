@@ -5,10 +5,14 @@ import { Time, UnixTime } from './Time.js'
 
 export interface Clock {
   readonly startTime: UnixTime
-  readonly currentTime: () => Time
-  readonly unixTime: () => UnixTime
-  readonly getTime: (duration: Duration) => Time
-  readonly getUnixTime: (duration: Duration) => UnixTime
+  readonly time: {
+    readonly get: () => Time
+    readonly delay: (duration: Duration) => Time
+  }
+  readonly unixTime: {
+    readonly get: () => UnixTime
+    readonly delay: (duration: Duration) => UnixTime
+  }
 }
 
 export const Clock = C.Tag<Clock>()
@@ -18,9 +22,13 @@ export function makeDateClock(): Clock {
 
   return {
     startTime: UnixTime(startTime),
-    currentTime: () => Time(Date.now() - startTime),
-    unixTime: () => UnixTime(Date.now()),
-    getTime: (duration) => Time(duration.millis),
-    getUnixTime: (duration) => UnixTime(Date.now() + duration.millis),
+    time: {
+      get: () => Time(Date.now() - startTime),
+      delay: (duration) => Time(Date.now() - startTime + duration.millis),
+    },
+    unixTime: {
+      get: () => UnixTime(Date.now()),
+      delay: (duration) => UnixTime(Date.now() + duration.millis),
+    },
   }
 }

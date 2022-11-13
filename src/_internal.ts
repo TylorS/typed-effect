@@ -1,7 +1,7 @@
 /**
  * @internal
  */
-export class MutableStack<A> {
+export class NonEmptyMutableStack<A> {
   protected stack: A[] = [this.initial]
   protected index = 0
 
@@ -24,4 +24,8 @@ export class MutableStack<A> {
 
     return this.initial
   }
+}
+
+export function flow2<A, B, C>(f: (a: A) => B, g: (a: B) => C): (a: A) => C {
+  return (a) => g(f(a))
 }

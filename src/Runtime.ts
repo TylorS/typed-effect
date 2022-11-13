@@ -1,43 +1,60 @@
-import * as Context from '@fp-ts/data/Context'
 import * as Either from '@fp-ts/data/Either'
-import { pipe } from '@fp-ts/data/Function'
-import * as Option from '@fp-ts/data/Option'
 
 import { CauseError } from './Cause.js'
-import { DefaultEnv, DefaultServices, IdGenerator } from './DefaultServices.js'
+import { getDefaultService } from './DefaultServices.js'
 import * as Effect from './Effect.js'
 import { Exit } from './Exit.js'
-import { FiberId } from './FiberId.js'
-import { FiberRuntime, FiberRuntimeOptions } from './FiberRuntime.js'
+import { Live } from './FiberId.js'
+import { FiberRuntime, RuntimeOptions } from './FiberRuntime.js'
+import { FiberScope } from './FiberScope.js'
+import { IdGenerator } from './IdGenerator.js'
 import { Scheduler } from './Scheduler.js'
 
 export interface Runtime<R> {
+  readonly forkFiber: <E, A>(
+    effect: Effect.Effect<R, E, A>,
+    options?: Partial<RuntimeOptions<R>>,
+  ) => FiberRuntime<R, E, A>
+
   readonly runWith: <E, A>(
     effect: Effect.Effect<R, E, A>,
     f: (exit: Exit<E, A>) => void,
-    options?: Partial<FiberRuntimeOptions<R>>,
+    options?: Partial<RuntimeOptions<R>>,
   ) => void
+
   readonly runPromiseExit: <E, A>(
     effect: Effect.Effect<R, E, A>,
-    options?: Partial<FiberRuntimeOptions<R>>,
+    options?: Partial<RuntimeOptions<R>>,
   ) => Promise<Exit<E, A>>
+
   readonly runPromise: <E, A>(
     effect: Effect.Effect<R, E, A>,
-    options?: Partial<FiberRuntimeOptions<R>>,
+    options?: Partial<RuntimeOptions<R>>,
   ) => Promise<A>
 }
 
-export function Runtime<R>(options: FiberRuntimeOptions<R>): Runtime<R> {
-  const scheduler = getDefaultService(options, Scheduler)
-  const makeNextId = getDefaultService(options, IdGenerator)
-  const makeNextFiberId = () => FiberId(makeNextId(), scheduler.currentTime())
-  const makeOptions = (overrides?: Partial<FiberRuntimeOptions<R>>): FiberRuntimeOptions<R> => ({
+export function Runtime<R>(options: RuntimeOptions<R>): Runtime<R> {
+  const scheduler = getDefaultService(options.context, options.fiberRefs, Scheduler)
+  const makeNextId = getDefaultService(options.context, options.fiberRefs, IdGenerator)
+  const makeNextFiberId = () => Live(makeNextId(), scheduler.time.get())
+  const makeOptions = (overrides?: Partial<RuntimeOptions<R>>): RuntimeOptions<R> => ({
     ...options,
     ...overrides,
   })
 
+  const forkFiber: Runtime<R>['forkFiber'] = (effect, overrides) => {
+    const id = makeNextFiberId()
+    const opts = makeOptions(overrides)
+    const scope = FiberScope(id)
+    const child = new FiberRuntime(effect, id, { ...opts, scope })
+
+    opts.scope.addChild(child)
+
+    return child
+  }
+
   const runWith: Runtime<R>['runWith'] = (effect, f, overrides) => {
-    const r = new FiberRuntime(effect, makeNextFiberId(), makeOptions(overrides))
+    const r = forkFiber(effect, overrides)
     r.addObserver(f)
     r.start()
     return r
@@ -56,25 +73,9 @@ export function Runtime<R>(options: FiberRuntimeOptions<R>): Runtime<R> {
     )
 
   return {
+    forkFiber,
     runWith,
     runPromiseExit,
     runPromise,
   }
-}
-
-const getDefaultService = <R, S extends DefaultServices>(
-  options: FiberRuntimeOptions<R>,
-  service: Context.Tag<S>,
-): S => {
-  const contextOption = pipe(options.context, Context.getOption<S>(service))
-
-  if (Option.isSome(contextOption)) {
-    return contextOption.value
-  }
-
-  return pipe(
-    options.fiberRefs.getOption(DefaultServices),
-    Option.getOrElse(DefaultEnv),
-    Context.get(service as Context.Tags<S>),
-  ) as S
 }

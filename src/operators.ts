@@ -2,12 +2,16 @@ import * as Context from '@fp-ts/data/Context'
 import { pipe } from '@fp-ts/data/Function'
 
 import { Clock } from './Clock.js'
-import { DefaultEnv, DefaultServices } from './DefaultServices.js'
+import { DefaultServices, DefaultServicesContext, getDefaultService } from './DefaultServices.js'
 import * as Effect from './Effect.js'
+import { Fiber } from './Fiber.js'
+import { None } from './FiberId.js'
 import { makeFiberRefs } from './FiberRefs.js'
-import { FiberRuntimeFlags } from './FiberRuntimeFlags.js'
+import { RuntimeOptions } from './FiberRuntime.js'
+import { FiberScope, GlobalFiberScope } from './FiberScope.js'
 import { Layer } from './Layer.js'
 import { Runtime } from './Runtime.js'
+import { RuntimeFlags } from './RuntimeFlags.js'
 import { Scheduler } from './Scheduler.js'
 
 export function provideService<S>(tag: Context.Tag<S>, service: S) {
@@ -51,9 +55,10 @@ export function asksEffect<S, R, E, A>(
 }
 
 export const DefaultRuntime: Runtime<DefaultServices> = Runtime({
-  context: DefaultEnv,
+  context: DefaultServicesContext,
+  scope: FiberScope(None),
   fiberRefs: makeFiberRefs(),
-  flags: FiberRuntimeFlags(),
+  flags: RuntimeFlags(),
 })
 
 export const {
@@ -62,22 +67,50 @@ export const {
   runPromiseExit: runMainExit,
 } = DefaultRuntime
 
-export const getScheduler: Effect.Effect<never, never, Scheduler> = pipe(
-  DefaultServices,
-  Effect.getFiberRef,
-  Effect.map(Context.get(Scheduler)),
-)
+export const getScheduler: Effect.Effect<never, never, Scheduler> = Effect.Effect(function* () {
+  const ctx = yield* context<never>()
+  const fiberRefs = yield* Effect.getFiberRefs
+
+  return getDefaultService(ctx, fiberRefs, Scheduler)
+})
 
 export const getClock: Effect.Effect<never, never, Clock> = getScheduler
+
+export const getGlobalFiberScope: Effect.Effect<never, never, GlobalFiberScope> = Effect.Effect(
+  function* () {
+    const ctx = yield* context<never>()
+    const fiberRefs = yield* Effect.getFiberRefs
+
+    return getDefaultService(ctx, fiberRefs, GlobalFiberScope)
+  },
+)
 
 export const context = <R>(): Effect.Effect<R, never, Context.Context<R>> =>
   Effect.access(Effect.of)
 
+const getRuntimeOptions_ = Effect.getRuntimeOptions<any>()
+
 export const runtime = <R>(): Effect.Effect<R, never, Runtime<R>> =>
-  Effect.Effect(function* () {
-    return Runtime({
-      context: yield* context<R>(),
-      fiberRefs: yield* Effect.getFiberRefs,
-      flags: yield* Effect.getRuntimeFlags,
-    })
-  })
+  pipe(getRuntimeOptions_, Effect.map(Runtime))
+
+const getRuntime_ = runtime<any>()
+
+export const fork = <R, E, A>(
+  effect: Effect.Effect<R, E, A>,
+  options?: Partial<RuntimeOptions<R>>,
+): Effect.Effect<R, never, Fiber<E, A>> =>
+  pipe(
+    getRuntime_,
+    Effect.map((r) => r.forkFiber(effect, options)),
+  )
+
+export const runtimeDaemon = <R>(): Effect.Effect<R, never, Runtime<R>> =>
+  pipe(
+    Effect.getRuntimeOptions<R>(),
+    Effect.map((opts) =>
+      Runtime({
+        ...opts,
+        scope: getDefaultService(opts.context, opts.fiberRefs, GlobalFiberScope),
+      }),
+    ),
+  )

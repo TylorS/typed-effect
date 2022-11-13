@@ -7,9 +7,11 @@ import { Cause, CauseError } from './Cause.js'
 import type { Exit } from './Exit.js'
 import type { FiberRef } from './FiberRef.js'
 import type { FiberRefs } from './FiberRefs.js'
-import { FiberRuntimeFlags } from './FiberRuntimeFlags.js'
+import type { RuntimeOptions } from './FiberRuntime.js'
+import type { FiberScope } from './FiberScope.js'
 import type { Future } from './Future.js'
 import * as I from './Instruction.js'
+import { RuntimeFlags } from './RuntimeFlags.js'
 
 export interface Effect<Services, Errors, Output>
   extends Effect.Variance<Services, Errors, Output> {
@@ -142,16 +144,22 @@ export function wait<R, E, A>(future: Future<R, E, A>): Effect<R, E, A> {
 }
 
 export function uninterruptable<R, E, A>(eff: Effect<R, E, A>): Effect<R, E, A> {
-  return new I.SetInterruptStatus([eff, false])
+  return new I.UpdateRuntimeFlags([eff, (flags) => ({ ...flags, interruptStatus: false })])
 }
 
-export function interruptible<R, E, A>(eff: Effect<R, E, A>): Effect<R, E, A> {
-  return new I.SetInterruptStatus([eff, true])
+export function interruptable<R, E, A>(eff: Effect<R, E, A>): Effect<R, E, A> {
+  return new I.UpdateRuntimeFlags([eff, (flags) => ({ ...flags, interruptStatus: true })])
 }
 
 export const getFiberRefs: Effect<never, never, FiberRefs> = new I.GetFiberRefs()
 
-export const getRuntimeFlags: Effect<never, never, FiberRuntimeFlags> = new I.GetRuntimeFlags()
+export const getFiberScope: Effect<never, never, FiberScope> = new I.GetFiberScope()
+
+export const getRuntimeFlags: Effect<never, never, RuntimeFlags> = new I.GetRuntimeFlags()
+
+const getRuntimeOptions_ = new I.GetRuntimeOptions<any>()
+
+export const getRuntimeOptions = <R>(): Effect<R, never, RuntimeOptions<R>> => getRuntimeOptions_
 
 export const getFiberRef = <R, E, A>(ref: FiberRef<R, E, A>): Effect<R, E, A> =>
   pipe(

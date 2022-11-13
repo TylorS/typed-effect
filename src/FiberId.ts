@@ -1,13 +1,25 @@
 import { Time } from './Time.js'
 
-export interface FiberId {
-  readonly id: number
-  readonly startTime: Time
+export type FiberId = FiberId.Live | FiberId.None
+
+export namespace FiberId {
+  export interface Live {
+    readonly tag: 'Live'
+    readonly id: number
+    readonly startTime: Time
+  }
+
+  export interface None {
+    readonly tag: 'None'
+  }
 }
 
-export function FiberId(id: number, startTime: Time): FiberId {
+export function Live(id: number, startTime: Time): FiberId.Live {
   return {
-    id: id++,
+    tag: 'Live',
+    id,
     startTime,
   }
 }
+
+export const None: FiberId.None = { tag: 'None' }

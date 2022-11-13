@@ -70,14 +70,14 @@ export function makeScheduler(timer: Timer = makeSetTimeoutTimer()): Scheduler {
     new Lazy(() => {
       const task = new Task(effect)
 
-      add(timer.getUnixTime(duration), task.start)
+      add(timer.unixTime.delay(duration), task.start)
 
       return task.wait
     })
 
   const schedule: Scheduler['schedule'] = (effect, schedule) =>
     Effect(function* () {
-      const startTime = timer.currentTime()
+      const startTime = timer.time.get()
       let [state, decision] = schedule.step(ScheduleState.initial(startTime), {
         currentTime: startTime,
         currentDelay: O.none,
@@ -89,7 +89,7 @@ export function makeScheduler(timer: Timer = makeSetTimeoutTimer()): Scheduler {
         if (O.isSome(currentDelay)) {
           const task = new Task(effect)
 
-          add(timer.getUnixTime(currentDelay.value), task.start)
+          add(timer.unixTime.delay(currentDelay.value), task.start)
 
           yield* task.wait
         } else {
@@ -97,7 +97,7 @@ export function makeScheduler(timer: Timer = makeSetTimeoutTimer()): Scheduler {
         }
 
         ;[state, decision] = schedule.step(state, {
-          currentTime: timer.currentTime(),
+          currentTime: timer.time.get(),
           currentDelay,
         })
       }
@@ -107,10 +107,8 @@ export function makeScheduler(timer: Timer = makeSetTimeoutTimer()): Scheduler {
 
   return {
     startTime: timer.startTime,
-    currentTime: timer.currentTime,
+    time: timer.time,
     unixTime: timer.unixTime,
-    getTime: timer.getTime,
-    getUnixTime: timer.getUnixTime,
     dispose: disposable.dispose,
     delay,
     schedule,
@@ -148,13 +146,13 @@ function callbackScheduler(
     // and schedule the new one.
     if (needToScheduleEarlierTime) {
       disposable.dispose()
-      disposable = timer.setTimer(runReadyTasks, Duration.millis(next - timer.currentTime()))
+      disposable = timer.setTimer(runReadyTasks, Duration.millis(next - timer.time.get()))
       nextArrival = next
     }
   }
 
   function runReadyTasks() {
-    timeline.getReadyTasks(timer.unixTime()).forEach((f) => f())
+    timeline.getReadyTasks(timer.unixTime.get()).forEach((f) => f())
 
     scheduleNextRun()
   }

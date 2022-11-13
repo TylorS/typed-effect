@@ -3,13 +3,11 @@ import { Context } from '@fp-ts/data/Context'
 import type { Cause } from './Cause.js'
 import type { Effect } from './Effect.js'
 import type { FiberRefs } from './FiberRefs.js'
-import type { FiberRuntimeFlags } from './FiberRuntimeFlags.js'
+import type { RuntimeOptions } from './FiberRuntime.js'
+import type { FiberScope } from './FiberScope.js'
 import type { Future } from './Future.js'
+import type { RuntimeFlags } from './RuntimeFlags.js'
 
-// TODO: Fusion of frames
-// TODO: Fork
-// TODO: Set runtime flags
-// TODO: FiberScope + Cancelation
 // TODO: Scope
 // TODO: Semaphores
 
@@ -19,14 +17,16 @@ export type Instruction<R, E, A> =
   | FlatMap<R, E, any, R, E, A>
   | FlatMapCause<R, any, A, R, E, A>
   | FromCause<E>
+  | GetFiberScope
   | GetRuntimeFlags
+  | GetRuntimeOptions<R>
   | Lazy<R, E, A>
   | Map<R, E, any, A>
   | MapCause<R, any, A, E>
   | Match<R, any, any, R, E, A, R, E, A>
   | Of<A>
   | ProvideContext<any, E, A>
-  | SetInterruptStatus<R, E, A>
+  | UpdateRuntimeFlags<R, E, A>
   | WithFiberRefs<R, E, A>
 
 abstract class Instr<I, R, E, A> implements Effect<R, E, A> {
@@ -119,17 +119,21 @@ export class Async<R, E, A> extends Instr<Future<R, E, A>, R, E, A> {
   readonly tag = 'Async'
 }
 
-export class SetInterruptStatus<R, E, A> extends Instr<
-  readonly [Effect<R, E, A>, boolean],
+export class GetRuntimeFlags extends Instr<void, never, never, RuntimeFlags> {
+  readonly tag = 'GetRuntimeFlags'
+}
+
+export class GetRuntimeOptions<R> extends Instr<void, R, never, RuntimeOptions<R>> {
+  readonly tag = 'GetRuntimeOptions'
+}
+
+export class UpdateRuntimeFlags<R, E, A> extends Instr<
+  readonly [Effect<R, E, A>, (flags: RuntimeFlags) => RuntimeFlags],
   R,
   E,
   A
 > {
-  readonly tag = 'SetInterruptStatus'
-}
-
-export class GetRuntimeFlags extends Instr<void, never, never, FiberRuntimeFlags> {
-  readonly tag = 'GetRuntimeFlags'
+  readonly tag = 'UpdateRuntimeFlags'
 }
 
 export class GetFiberRefs extends Instr<void, never, never, FiberRefs> {
@@ -138,4 +142,8 @@ export class GetFiberRefs extends Instr<void, never, never, FiberRefs> {
 
 export class WithFiberRefs<R, E, A> extends Instr<readonly [Effect<R, E, A>, FiberRefs], R, E, A> {
   readonly tag = 'WithFiberRefs'
+}
+
+export class GetFiberScope extends Instr<void, never, never, FiberScope> {
+  readonly tag = 'GetFiberScope'
 }

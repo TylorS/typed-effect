@@ -23,12 +23,12 @@ const shouldUseMicroTask = Duration.lessThanOrEqualTo(Duration.zero)
 export function makeSetTimeoutTimer(clock: Clock = makeDateClock()): Timer {
   return make(clock, (f, duration) => {
     if (shouldUseMicroTask(duration)) {
-      queueMicrotask(() => f(clock.currentTime()))
+      queueMicrotask(() => f(clock.time.get()))
 
       return Disposable.unit
     }
 
-    const id = setTimeout(() => f(clock.currentTime()), duration.millis)
+    const id = setTimeout(() => f(clock.time.get()), duration.millis)
 
     return Disposable(() => clearTimeout(id))
   })

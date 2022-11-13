@@ -5,9 +5,12 @@ import { pipe } from 'node_modules/@fp-ts/data/Function.js'
 
 import { Expected } from './Cause.js'
 import * as Effect from './Effect.js'
+import { makeScheduler } from './Scheduler.js'
 import { runMain, runMainExit } from './operators.js'
 
 describe(import.meta.url, () => {
+  const scheduler = makeScheduler()
+
   describe(Effect.of.name, () => {
     it('lifts a value into an Effect context', async () => {
       const value = Math.random()
@@ -20,7 +23,7 @@ describe(import.meta.url, () => {
   describe(Effect.fromCause.name, () => {
     it('lifts a Cause into an Effect context', async () => {
       const value = Math.random()
-      const cause = new Expected(value)
+      const cause = new Expected(scheduler.unixTime.get(), value)
       const exit = await runMainExit(Effect.fromCause(cause))
 
       deepStrictEqual(exit, left(cause))
