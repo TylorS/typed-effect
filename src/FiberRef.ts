@@ -3,7 +3,7 @@ import { Option, some } from '@fp-ts/data/Option'
 
 import { Effect, getFiberRef } from './Effect.js'
 
-// TODO: Composition types - Invariant
+// TODO: Composition types - Invariant Map, Match, Fresh, Lazy?, Tuple, Struct
 
 export interface FiberRef<R, E, A> {
   readonly id: FiberRefId
