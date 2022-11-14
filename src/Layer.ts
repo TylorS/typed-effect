@@ -6,8 +6,6 @@ import { FiberRef } from './FiberRef.js'
 
 export interface Layer<R, E, A> extends FiberRef<R, E, Context<A>> {}
 
-export function Layer<R, E, A>(name: string, effect: Effect<R, E, Context<A>>) {
-  return FiberRef(name, effect, {
-    join: identity,
-  })
+export function Layer<R, E, A>(effect: Effect<R, E, Context<A>>): Layer<R, E, A> {
+  return FiberRef(effect, { join: identity })
 }
