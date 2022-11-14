@@ -1,5 +1,7 @@
 import { Time } from './Time.js'
 
+// TODO: Synthetic IDs
+
 export type FiberId = FiberId.Live | FiberId.None
 
 export namespace FiberId {

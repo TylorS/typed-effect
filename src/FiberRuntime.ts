@@ -230,7 +230,6 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
 
   protected Fork(instr: I.Fork<any, any, any>) {
     const [effect, overrides] = instr.input
-
     const id = Live(this.getNextId(), this.getTime())
     const options = {
       ...this.getCurrentRuntimeOptions(),
@@ -240,9 +239,7 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
     const child = new FiberRuntime(effect, id, { ...options, scope })
 
     options.scope.addChild(child)
-
     child.start()
-
     this.continueWith(child)
   }
   // Frames

@@ -4,6 +4,7 @@ import { Exit } from './Exit.js'
 import { FiberId } from './FiberId.js'
 
 // TODO: Trace
+// TODO: Runtime vs Synthetic Fibers
 
 export interface Fiber<Errors, Output> {
   readonly id: FiberId
