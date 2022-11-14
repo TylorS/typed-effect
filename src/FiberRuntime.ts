@@ -69,6 +69,8 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
     return new I.Async(future)
   })
 
+  readonly inheritRefs: Fiber<Errors, Output>['inheritRefs'] = this.options.fiberRefs.inherit
+
   readonly addObserver: Fiber<Errors, Output>['addObserver'] = (observer) => {
     this.observers.push(observer)
 

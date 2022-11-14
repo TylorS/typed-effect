@@ -12,6 +12,7 @@ import type { FiberScope } from './FiberScope.js'
 import type { Future } from './Future.js'
 import * as I from './Instruction.js'
 import { RuntimeFlags } from './RuntimeFlags.js'
+import { flow2 } from './_internal.js'
 
 export interface Effect<Services, Errors, Output>
   extends Effect.Variance<Services, Errors, Output> {
@@ -78,6 +79,10 @@ export function sync<A>(f: () => A, __trace?: string): Effect<never, never, A> {
   return new I.Sync(f, __trace)
 }
 
+export function lazy<R, E, A>(f: () => Effect<R, E, A>, __trace?: string): Effect<R, E, A> {
+  return new I.Lazy(f, __trace)
+}
+
 export function access<R, R2, E2, A>(
   f: (r: Context<R>) => Effect<R2, E2, A>,
   __trace?: string,
@@ -90,10 +95,6 @@ export function provide<R>(
   __trace?: string,
 ): <E, A>(effect: Effect<R, E, A>) => Effect<never, E, A> {
   return (effect) => new I.ProvideContext([effect, context], __trace)
-}
-
-export function lazy<R, E, A>(f: () => Effect<R, E, A>, __trace?: string): Effect<R, E, A> {
-  return new I.Lazy(f, __trace)
 }
 
 export function map<A, B>(f: (a: A) => B, __trace?: string) {
@@ -117,14 +118,7 @@ export function attempt<R, E, A>(
   eff: Effect<R, E, A>,
   __trace?: string,
 ): Effect<R, never, Exit<E, A>> {
-  return pipe(
-    eff,
-    matchCause(
-      (cause) => of(left(cause)),
-      (value) => of(right(value)),
-      __trace,
-    ),
-  )
+  return pipe(eff, matchCause(flow2(left, of), flow2(right, of), __trace))
 }
 
 export function flatMapCause<E, R2, E2, B>(
@@ -143,12 +137,16 @@ export function wait<R, E, A>(future: Future<R, E, A>): Effect<R, E, A> {
   return new I.Async(future)
 }
 
-export function uninterruptable<R, E, A>(eff: Effect<R, E, A>): Effect<R, E, A> {
-  return new I.UpdateRuntimeFlags([eff, (flags) => ({ ...flags, interruptStatus: false })])
+export function updateRuntimeFlags(f: (flags: RuntimeFlags) => RuntimeFlags, __trace?: string) {
+  return <R, E, A>(effect: Effect<R, E, A>) => new I.UpdateRuntimeFlags([effect, f], __trace)
 }
 
-export function interruptable<R, E, A>(eff: Effect<R, E, A>): Effect<R, E, A> {
-  return new I.UpdateRuntimeFlags([eff, (flags) => ({ ...flags, interruptStatus: true })])
+export function uninterruptable<R, E, A>(eff: Effect<R, E, A>, __trace?: string): Effect<R, E, A> {
+  return updateRuntimeFlags((flags) => ({ ...flags, interruptStatus: false }), __trace)(eff)
+}
+
+export function interruptable<R, E, A>(eff: Effect<R, E, A>, __trace?: string): Effect<R, E, A> {
+  return updateRuntimeFlags((flags) => ({ ...flags, interruptStatus: true }), __trace)(eff)
 }
 
 export const getFiberRefs: Effect<never, never, FiberRefs> = new I.GetFiberRefs()

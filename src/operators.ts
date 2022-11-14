@@ -4,10 +4,9 @@ import { pipe } from '@fp-ts/data/Function'
 import { Clock } from './Clock.js'
 import { DefaultServices, DefaultServicesContext, getDefaultService } from './DefaultServices.js'
 import * as Effect from './Effect.js'
-import { Fiber } from './Fiber.js'
 import { None } from './FiberId.js'
 import { makeFiberRefs } from './FiberRefs.js'
-import { RuntimeOptions } from './FiberRuntime.js'
+import { FiberRuntime, RuntimeOptions } from './FiberRuntime.js'
 import { FiberScope, GlobalFiberScope } from './FiberScope.js'
 import { Layer } from './Layer.js'
 import { Runtime } from './Runtime.js'
@@ -98,7 +97,7 @@ const getRuntime_ = runtime<any>()
 export const fork = <R, E, A>(
   effect: Effect.Effect<R, E, A>,
   options?: Partial<RuntimeOptions<R>>,
-): Effect.Effect<R, never, Fiber<E, A>> =>
+): Effect.Effect<R, never, FiberRuntime<R, E, A>> =>
   pipe(
     getRuntime_,
     Effect.map((r) => r.forkFiber(effect, options)),

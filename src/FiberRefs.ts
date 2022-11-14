@@ -7,19 +7,19 @@ import * as Effect from './Effect.js'
 import { FiberRef, FiberRefId } from './FiberRef.js'
 import { Future, pending } from './Future.js'
 
-// TODO: Inherit
 // TODO: Effect variants + Semaphore
 
 export interface FiberRefs {
   readonly getReferences: () => ReadonlyMap<FiberRef<any, any, any>, any>
   readonly getOption: <R, E, A>(fiberRef: FiberRef<R, E, A>) => Option.Option<A>
   readonly get: <R, E, A>(fiberRef: FiberRef<R, E, A>) => Effect.Effect<R, E, A>
-  readonly set: <R, E, A>(fiberRef: FiberRef<R, E, A>, a: A) => Effect.Effect<R, E, A>
+  readonly set: <R, E, A>(fiberRef: FiberRef<R, E, A>, a: A) => Effect.Effect<never, never, A>
   readonly modify: <R, E, A, B>(
     fiberRef: FiberRef<R, E, A>,
     f: (a: A) => readonly [B, A],
   ) => Effect.Effect<R, E, B>
   readonly delete: <R, E, A>(fiberRef: FiberRef<R, E, A>) => Effect.Effect<R, E, Option.Option<A>>
+  readonly inherit: Effect.Effect<never, never, void>
 }
 
 export const FiberRefs = C.Tag<FiberRefs>()
@@ -71,6 +71,7 @@ export function makeFiberRefs(
       const eff = Effect.fromExit(exit)
 
       future.complete(eff)
+      initializing.delete(fiberRef.id)
 
       return yield* eff
     })
@@ -114,6 +115,25 @@ export function makeFiberRefs(
       return option
     })
 
+  const inherit: FiberRefs['inherit'] = pipe(
+    Effect.getFiberRefs,
+    Effect.flatMap((fiberRefs) =>
+      Effect.Effect(function* () {
+        for (const [fiberRef, value] of getReferences()) {
+          const current = fiberRefs.getOption(fiberRef)
+
+          yield* pipe(
+            current,
+            Option.match(
+              () => fiberRefs.set(fiberRef, value),
+              (current) => fiberRefs.set(fiberRef, fiberRef.join(current, value)),
+            ),
+          )
+        }
+      }),
+    ),
+  )
+
   const refs: FiberRefs = {
     getReferences,
     getOption,
@@ -121,6 +141,7 @@ export function makeFiberRefs(
     set,
     modify,
     delete: delete_,
+    inherit,
   }
 
   return refs

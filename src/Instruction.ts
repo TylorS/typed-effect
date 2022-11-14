@@ -8,8 +8,11 @@ import type { FiberScope } from './FiberScope.js'
 import type { Future } from './Future.js'
 import type { RuntimeFlags } from './RuntimeFlags.js'
 
+// TODO: Fork
 // TODO: Scope
 // TODO: Semaphores
+// TODO: Ref Profunctor
+// TODO: Concurrency
 
 export type Instruction<R, E, A> =
   | AccessContext<R, R, E, A>

@@ -8,6 +8,7 @@ import { FiberId } from './FiberId.js'
 export interface Fiber<Errors, Output> {
   readonly id: FiberId
   readonly exit: Effect<never, never, Exit<Errors, Output>>
+  readonly inheritRefs: Effect<never, never, void>
   readonly addObserver: (observer: (exit: Exit<Errors, Output>) => void) => Disposable
   readonly interruptAs: (id: FiberId) => Effect<never, never, Exit<Errors, Output>>
 }
