@@ -8,9 +8,9 @@ import { Disposable } from './Disposable.js'
 import { Effect } from './Effect.js'
 import { Exit } from './Exit.js'
 import type { Fiber } from './Fiber.js'
-import type { FiberId } from './FiberId.js'
+import { FiberId, Live } from './FiberId.js'
 import type { FiberRefs } from './FiberRefs.js'
-import type { FiberScope } from './FiberScope.js'
+import { FiberScope } from './FiberScope.js'
 import * as FiberStatus from './FiberStatus.js'
 import {
   FlatMapCauseFrame,
@@ -24,6 +24,7 @@ import {
   TraceFrame,
 } from './Frame.js'
 import { pending } from './Future.js'
+import { IdGenerator } from './IdGenerator.js'
 import * as I from './Instruction.js'
 import type { RuntimeFlags } from './RuntimeFlags.js'
 import { Scheduler } from './Scheduler.js'
@@ -228,14 +229,17 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
   }
 
   protected Fork(instr: I.Fork<any, any, any>) {
-    const [effect, options] = instr.input
+    const [effect, overrides] = instr.input
 
-    const child = new FiberRuntime(effect, this.id, {
+    const id = Live(this.getNextId(), this.getTime())
+    const options = {
       ...this.getCurrentRuntimeOptions(),
-      ...options,
-    })
+      ...overrides,
+    }
+    const scope = FiberScope(id)
+    const child = new FiberRuntime(effect, id, { ...options, scope })
 
-    this.options.scope.addChild(child)
+    options.scope.addChild(child)
 
     child.start()
 
@@ -372,8 +376,20 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
     return getDefaultService(this.currentContext.current, this.currentFiberRefs.current, Scheduler)
   }
 
+  protected getTime() {
+    return this.getScheduler().time.get()
+  }
+
   protected getUnixTime() {
     return this.getScheduler().unixTime.get()
+  }
+
+  protected getNextId() {
+    return getDefaultService(
+      this.currentContext.current,
+      this.currentFiberRefs.current,
+      IdGenerator,
+    )()
   }
 
   protected shouldInterrupt() {

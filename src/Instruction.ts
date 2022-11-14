@@ -2,14 +2,12 @@ import { Context } from '@fp-ts/data/Context'
 
 import type { Cause } from './Cause.js'
 import type { Effect } from './Effect.js'
-import type { Fiber } from './Fiber.js'
 import type { FiberRefs } from './FiberRefs.js'
-import type { RuntimeOptions } from './FiberRuntime.js'
+import type { FiberRuntime, RuntimeOptions } from './FiberRuntime.js'
 import type { FiberScope } from './FiberScope.js'
 import type { Future } from './Future.js'
 import type { RuntimeFlags } from './RuntimeFlags.js'
 
-// TODO: Fork
 // TODO: Scope
 // TODO: Semaphores
 // TODO: Ref Profunctor
@@ -157,7 +155,7 @@ export class Fork<R, E, A> extends Instr<
   readonly [Effect<R, E, A>, Partial<RuntimeOptions<R>>?],
   R,
   never,
-  Fiber<E, A>
+  FiberRuntime<R, E, A>
 > {
   readonly tag = 'Fork'
 }
