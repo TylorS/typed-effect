@@ -12,6 +12,7 @@ import { Layer } from './Layer.js'
 import { Runtime } from './Runtime.js'
 import { RuntimeFlags } from './RuntimeFlags.js'
 import { Scheduler } from './Scheduler.js'
+import { Time, UnixTime } from './Time.js'
 
 export function provideService<S>(tag: Context.Tag<S>, service: S) {
   const addService = Context.add(tag)(service)
@@ -74,6 +75,16 @@ export const getScheduler: Effect.Effect<never, never, Scheduler> = Effect.Effec
 })
 
 export const getClock: Effect.Effect<never, never, Clock> = getScheduler
+
+export const getCurrentTime: Effect.Effect<never, never, Time> = pipe(
+  getClock,
+  Effect.map((c) => c.time.get()),
+)
+
+export const getCurrentUnixTime: Effect.Effect<never, never, UnixTime> = pipe(
+  getClock,
+  Effect.map((c) => c.unixTime.get()),
+)
 
 export const getGlobalFiberScope: Effect.Effect<never, never, GlobalFiberScope> = Effect.Effect(
   function* () {
