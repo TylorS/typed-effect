@@ -5,13 +5,14 @@ import { Option } from '@fp-ts/data/Option'
 
 import { Cause, CauseError } from './Cause.js'
 import type { Exit } from './Exit.js'
+import type { Fiber } from './Fiber.js'
 import type { FiberRef } from './FiberRef.js'
 import type { FiberRefs } from './FiberRefs.js'
 import type { RuntimeOptions } from './FiberRuntime.js'
 import type { FiberScope } from './FiberScope.js'
 import type { Future } from './Future.js'
 import * as I from './Instruction.js'
-import { RuntimeFlags } from './RuntimeFlags.js'
+import type { RuntimeFlags } from './RuntimeFlags.js'
 import { flow2 } from './_internal.js'
 
 export interface Effect<Services, Errors, Output>
@@ -201,3 +202,13 @@ export const withFiberRefs =
   (refs: FiberRefs, __trace?: string) =>
   <R, E, A>(effect: Effect<R, E, A>): Effect<R, E, A> =>
     new I.WithFiberRefs([effect, refs], __trace)
+
+export const fork = <R, E, A>(
+  effect: Effect<R, E, A>,
+  __trace?: string,
+): Effect<R, never, Fiber<E, A>> => new I.Fork([effect], __trace)
+
+export const forkWithOptions =
+  <R>(options: Partial<RuntimeOptions<R>>) =>
+  <E, A>(effect: Effect<R, E, A>, __trace?: string): Effect<R, never, Fiber<E, A>> =>
+    new I.Fork([effect, options], __trace)

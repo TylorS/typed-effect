@@ -224,14 +224,23 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
   }
 
   protected GetRuntimeOptions() {
-    this.continueWith({
-      context: this.currentContext.current,
-      scope: this.options.scope,
-      fiberRefs: this.currentFiberRefs.current,
-      flags: this.currentRuntimeFlags.current,
-    })
+    this.continueWith(this.getCurrentRuntimeOptions())
   }
 
+  protected Fork(instr: I.Fork<any, any, any>) {
+    const [effect, options] = instr.input
+
+    const child = new FiberRuntime(effect, this.id, {
+      ...this.getCurrentRuntimeOptions(),
+      ...options,
+    })
+
+    this.options.scope.addChild(child)
+
+    child.start()
+
+    this.continueWith(child)
+  }
   // Frames
 
   protected Map(instr: I.Map<any, any, any, any>) {
@@ -374,5 +383,14 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
   protected interruptNow() {
     this.interrupting = true
     this.continueWithCause(this.interruptCause)
+  }
+
+  protected getCurrentRuntimeOptions() {
+    return {
+      context: this.currentContext.current,
+      scope: this.options.scope,
+      fiberRefs: this.currentFiberRefs.current,
+      flags: this.currentRuntimeFlags.current,
+    }
   }
 }

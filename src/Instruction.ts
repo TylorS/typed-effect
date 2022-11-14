@@ -2,6 +2,7 @@ import { Context } from '@fp-ts/data/Context'
 
 import type { Cause } from './Cause.js'
 import type { Effect } from './Effect.js'
+import type { Fiber } from './Fiber.js'
 import type { FiberRefs } from './FiberRefs.js'
 import type { RuntimeOptions } from './FiberRuntime.js'
 import type { FiberScope } from './FiberScope.js'
@@ -19,6 +20,7 @@ export type Instruction<R, E, A> =
   | Async<R, E, A>
   | FlatMap<R, E, any, R, E, A>
   | FlatMapCause<R, any, A, R, E, A>
+  | Fork<R, E, A>
   | FromCause<E>
   | GetFiberScope
   | GetRuntimeFlags
@@ -149,4 +151,13 @@ export class WithFiberRefs<R, E, A> extends Instr<readonly [Effect<R, E, A>, Fib
 
 export class GetFiberScope extends Instr<void, never, never, FiberScope> {
   readonly tag = 'GetFiberScope'
+}
+
+export class Fork<R, E, A> extends Instr<
+  readonly [Effect<R, E, A>, Partial<RuntimeOptions<R>>?],
+  R,
+  never,
+  Fiber<E, A>
+> {
+  readonly tag = 'Fork'
 }
