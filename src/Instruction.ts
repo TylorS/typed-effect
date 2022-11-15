@@ -8,7 +8,6 @@ import type { FiberScope } from './FiberScope.js'
 import type { Future } from './Future.js'
 import type { RuntimeFlags } from './RuntimeFlags.js'
 
-// TODO: Scope
 // TODO: Semaphores
 // TODO: Ref Profunctor
 // TODO: Concurrency
