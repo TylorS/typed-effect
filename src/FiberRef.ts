@@ -3,31 +3,29 @@ import { Option, some } from '@fp-ts/data/Option'
 
 import { Effect, getFiberRef } from './Effect.js'
 
-// TODO: Composition types - Invariant Map, Match, Fresh, Lazy?, Tuple, Struct
-
 export interface FiberRef<R, E, A> {
-  readonly id: FiberRefId
+  readonly id: FiberRefId<A>
   readonly initial: Effect<R, E, A>
   readonly fork: (current: A) => Option<A>
   readonly join: (current: A, incoming: A) => A
 
   readonly [Symbol.iterator]: () => Generator<Effect<R, E, A>, A, A>
 
-  readonly withId: (id: FiberRefId) => FiberRef<R, E, A>
+  readonly as: (id: FiberRefId<A>) => FiberRef<R, E, A>
 }
 
-export type FiberRefId = symbol & FIBER_REF_ID
+export type FiberRefId<A> = symbol & FIBER_REF_ID<A>
 
-export interface FIBER_REF_ID {
-  readonly FIBER_REF_ID: unique symbol
+export interface FIBER_REF_ID<A> {
+  readonly FIBER_REF_ID: A
 }
 
-export function FiberRefId(name?: string): FiberRefId {
-  return Symbol(name) as FiberRefId
+export function FiberRefId<A>(name?: string): FiberRefId<A> {
+  return Symbol(name) as FiberRefId<A>
 }
 
 export type FiberRefOptions<A> = {
-  readonly id?: FiberRefId
+  readonly id?: FiberRefId<A>
   readonly name?: string
   readonly fork?: (current: A) => Option<A>
   readonly join?: (current: A, incoming: A) => A
@@ -42,15 +40,11 @@ export function FiberRef<R, E, A>(
     initial,
     fork: options.fork ?? some,
     join: options.join ?? SK,
-    *[Symbol.iterator]() {
-      return yield* getFiberRef(ref)
-    },
-    withId(id) {
-      return {
-        ...ref,
-        id,
-      }
-    },
+    [Symbol.iterator]: () => getFiberRef(ref)[Symbol.iterator](),
+    as: (id) => ({
+      ...ref,
+      id,
+    }),
   }
 
   return ref

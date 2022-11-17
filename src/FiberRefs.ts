@@ -27,13 +27,13 @@ export const FiberRefs = C.Tag<FiberRefs>()
 export function makeFiberRefs(
   references: Map<FiberRef<any, any, any>, any> = new Map(),
 ): FiberRefs {
-  const valuesById = new Map<FiberRefId, any>(
+  const valuesById = new Map<FiberRefId<any>, any>(
     Array.from(references).map(([fiberRef, value]) => [fiberRef.id, value]),
   )
-  const refsById = new Map<FiberRefId, FiberRef<any, any, any>>(
+  const refsById = new Map<FiberRefId<any>, FiberRef<any, any, any>>(
     Array.from(references).map(([fiberRef]) => [fiberRef.id, fiberRef]),
   )
-  const initializing = new Map<FiberRefId, Future<any, any, any>>()
+  const initializing = new Map<FiberRefId<any>, Future<any, any, any>>()
 
   const getReferences = () => {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
