@@ -8,9 +8,6 @@ import type { FiberScope } from './FiberScope.js'
 import type { Future } from './Future.js'
 import type { RuntimeFlags } from './RuntimeFlags.js'
 
-// TODO: Semaphores
-// TODO: Ref Profunctor
-
 export type Instruction<R, E, A> =
   | AccessContext<R, R, E, A>
   | Async<R, E, A>

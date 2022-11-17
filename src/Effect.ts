@@ -200,6 +200,20 @@ export const setFiberRef =
       flatMap((refs) => refs.set(ref, value)),
     )
 
+export const updateFiberRef =
+  <A>(f: (a: A) => A) =>
+  <R, E>(ref: FiberRef<R, E, A>): Effect<R, E, A> =>
+    pipe(
+      getFiberRefs,
+      flatMap((refs) =>
+        refs.modify(ref, (a) => {
+          const a1 = f(a)
+
+          return [a1, a1]
+        }),
+      ),
+    )
+
 export const modifyFiberRef =
   <A, B>(f: (a: A) => readonly [B, A]) =>
   <R, E>(ref: FiberRef<R, E, A>): Effect<R, E, B> =>
