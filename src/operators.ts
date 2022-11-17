@@ -1,18 +1,10 @@
 import * as Context from '@fp-ts/data/Context'
 import { pipe } from '@fp-ts/data/Function'
+import { NonEmptyReadonlyArray } from '@fp-ts/data/ReadonlyArray'
 
-import { Clock } from './Clock.js'
-import { DefaultServices, DefaultServicesContext, getDefaultService } from './DefaultServices.js'
 import * as Effect from './Effect.js'
-import { None } from './FiberId.js'
-import { makeFiberRefs } from './FiberRefs.js'
-import { FiberRuntime, RuntimeOptions } from './FiberRuntime.js'
-import { FiberScope, GlobalFiberScope } from './FiberScope.js'
+import * as Fiber from './Fiber.js'
 import { Layer } from './Layer.js'
-import { Runtime } from './Runtime.js'
-import { RuntimeFlags } from './RuntimeFlags.js'
-import { Scheduler } from './Scheduler.js'
-import { Time, UnixTime } from './Time.js'
 
 export function provideService<S>(tag: Context.Tag<S>, service: S) {
   const addService = Context.add(tag)(service)
@@ -54,73 +46,96 @@ export function asksEffect<S, R, E, A>(
   return pipe(ask(tag), Effect.flatMap(f))
 }
 
-export const DefaultRuntime: Runtime<DefaultServices> = Runtime({
-  context: DefaultServicesContext,
-  scope: FiberScope(None),
-  fiberRefs: makeFiberRefs(),
-  flags: RuntimeFlags(),
-})
+export function zip<R2, E2, B>(second: Effect.Effect<R2, E2, B>) {
+  return <R, E, A>(first: Effect.Effect<R, E, A>): Effect.Effect<R | R2, E | E2, readonly [A, B]> =>
+    pipe(
+      first,
+      Effect.fork,
+      Effect.flatMap((fiberF) =>
+        pipe(
+          second,
+          Effect.fork,
+          Effect.map((fiberS) => Fiber.zip(fiberS)(fiberF)),
+        ),
+      ),
+      Effect.flatMap(Effect.join),
+    )
+}
 
-export const {
-  runWith: runMainWith,
-  runPromise: runMain,
-  runPromiseExit: runMainExit,
-} = DefaultRuntime
+export function zipAll<Effs extends ReadonlyArray<Effect.Effect<any, any, any>>>(
+  effects: Effs,
+): Effect.Effect<
+  Effect.Effect.ServicesOf<Effs[number]>,
+  Effect.Effect.ErrorsOf<Effs[number]>,
+  {
+    readonly [K in keyof Effs]: Effect.Effect.OutputOf<Effs[K]>
+  }
+> {
+  type R = Effect.Effect<
+    Effect.Effect.ServicesOf<Effs[number]>,
+    Effect.Effect.ErrorsOf<Effs[number]>,
+    {
+      readonly [K in keyof Effs]: Effect.Effect.OutputOf<Effs[K]>
+    }
+  >
 
-export const getScheduler: Effect.Effect<never, never, Scheduler> = Effect.Effect(function* () {
-  const ctx = yield* context<never>()
-  const fiberRefs = yield* Effect.getFiberRefs
+  if (effects.length === 0) {
+    return Effect.of([]) as unknown as R
+  } else if (effects.length === 1) {
+    return pipe(
+      effects[0],
+      Effect.map((a) => [a]),
+    ) as unknown as R
+  }
 
-  return getDefaultService(ctx, fiberRefs, Scheduler)
-})
+  const [first, ...rest] = effects
 
-export const getClock: Effect.Effect<never, never, Clock> = getScheduler
-
-export const getCurrentTime: Effect.Effect<never, never, Time> = pipe(
-  getClock,
-  Effect.map((c) => c.time.get()),
-)
-
-export const getCurrentUnixTime: Effect.Effect<never, never, UnixTime> = pipe(
-  getClock,
-  Effect.map((c) => c.unixTime.get()),
-)
-
-export const getGlobalFiberScope: Effect.Effect<never, never, GlobalFiberScope> = Effect.Effect(
-  function* () {
-    const ctx = yield* context<never>()
-    const fiberRefs = yield* Effect.getFiberRefs
-
-    return getDefaultService(ctx, fiberRefs, GlobalFiberScope)
-  },
-)
-
-export const context = <R>(): Effect.Effect<R, never, Context.Context<R>> =>
-  Effect.access(Effect.of)
-
-const getRuntimeOptions_ = Effect.getRuntimeOptions<any>()
-
-export const runtime = <R>(): Effect.Effect<R, never, Runtime<R>> =>
-  pipe(getRuntimeOptions_, Effect.map(Runtime))
-
-const getRuntime_ = runtime<any>()
-
-export const fork = <R, E, A>(
-  effect: Effect.Effect<R, E, A>,
-  options?: Partial<RuntimeOptions<R>>,
-): Effect.Effect<R, never, FiberRuntime<R, E, A>> =>
-  pipe(
-    getRuntime_,
-    Effect.map((r) => r.forkFiber(effect, options)),
-  )
-
-export const runtimeDaemon = <R>(): Effect.Effect<R, never, Runtime<R>> =>
-  pipe(
-    Effect.getRuntimeOptions<R>(),
-    Effect.map((opts) =>
-      Runtime({
-        ...opts,
-        scope: getDefaultService(opts.context, opts.fiberRefs, GlobalFiberScope),
-      }),
+  return rest.reduce(
+    (prev, cur) =>
+      pipe(
+        prev,
+        zip(cur),
+        Effect.map(([acc, x]) => [...acc, x]),
+      ),
+    pipe(
+      first,
+      Effect.map((x) => [x]),
     ),
-  )
+  ) as R
+}
+
+export function race<R2, E2, B>(second: Effect.Effect<R2, E2, B>) {
+  return <R, E, A>(first: Effect.Effect<R, E, A>): Effect.Effect<R | R2, E | E2, A | B> =>
+    pipe(
+      first,
+      Effect.fork,
+      Effect.flatMap((fiberF) =>
+        pipe(
+          second,
+          Effect.fork,
+          Effect.map((fiberS) => Fiber.race(fiberS)(fiberF)),
+        ),
+      ),
+      Effect.flatMap(Effect.join),
+    )
+}
+
+export function raceAll<Effs extends NonEmptyReadonlyArray<Effect.Effect<any, any, any>>>(
+  effects: Effs,
+): Effect.Effect<
+  Effect.Effect.ServicesOf<Effs[number]>,
+  Effect.Effect.ErrorsOf<Effs[number]>,
+  Effect.Effect.OutputOf<Effs[number]>
+> {
+  type R = Effect.Effect<
+    Effect.Effect.ServicesOf<Effs[number]>,
+    Effect.Effect.ErrorsOf<Effs[number]>,
+    Effect.Effect.OutputOf<Effs[number]>
+  >
+
+  if (effects.length === 1) {
+    return effects[0] as R
+  }
+
+  return effects.reduce((prev, cur) => race(cur)(prev)) as R
+}

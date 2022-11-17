@@ -1,13 +1,16 @@
 import * as Either from '@fp-ts/data/Either'
+import { pipe } from '@fp-ts/data/Function'
 
 import { CauseError } from './Cause.js'
-import { getDefaultService } from './DefaultServices.js'
+import { DefaultServices, DefaultServicesContext, getDefaultService } from './DefaultServices.js'
 import * as Effect from './Effect.js'
 import { Exit } from './Exit.js'
-import { Live } from './FiberId.js'
+import { Live, None } from './FiberId.js'
+import { makeFiberRefs } from './FiberRefs.js'
 import { FiberRuntime, RuntimeOptions } from './FiberRuntime.js'
-import { FiberScope } from './FiberScope.js'
+import { FiberScope, GlobalFiberScope } from './FiberScope.js'
 import { IdGenerator } from './IdGenerator.js'
+import { RuntimeFlags } from './RuntimeFlags.js'
 import { Scheduler } from './Scheduler.js'
 
 export interface Runtime<R> {
@@ -49,6 +52,7 @@ export function Runtime<R>(options: RuntimeOptions<R>): Runtime<R> {
     const child = new FiberRuntime(effect, id, { ...opts, scope })
 
     opts.scope.addChild(child)
+    child.start()
 
     return child
   }
@@ -79,3 +83,33 @@ export function Runtime<R>(options: RuntimeOptions<R>): Runtime<R> {
     runPromise,
   }
 }
+
+export const DefaultRuntime: Runtime<DefaultServices> = Runtime({
+  context: DefaultServicesContext,
+  scope: FiberScope(None),
+  fiberRefs: makeFiberRefs(),
+  flags: RuntimeFlags(),
+})
+
+export const {
+  forkFiber: forkMainFiber,
+  runWith: runMainWith,
+  runPromise: runMain,
+  runPromiseExit: runMainExit,
+} = DefaultRuntime
+
+const getRuntimeOptions_ = Effect.getRuntimeOptions<any>()
+
+export const runtime = <R>(): Effect.Effect<R, never, Runtime<R>> =>
+  pipe(getRuntimeOptions_, Effect.map(Runtime))
+
+export const runtimeDaemon = <R>(): Effect.Effect<R, never, Runtime<R>> =>
+  pipe(
+    Effect.getRuntimeOptions<R>(),
+    Effect.map((opts) =>
+      Runtime({
+        ...opts,
+        scope: getDefaultService(opts.context, opts.fiberRefs, GlobalFiberScope),
+      }),
+    ),
+  )

@@ -1,11 +1,11 @@
 import type { Context } from '@fp-ts/data/Context'
-import { left, right } from '@fp-ts/data/Either'
+import { isRight, left, right } from '@fp-ts/data/Either'
 import { pipe } from '@fp-ts/data/Function'
 import { Option } from '@fp-ts/data/Option'
 
 import { Cause, CauseError } from './Cause.js'
 import type { Exit } from './Exit.js'
-import type { Fiber } from './Fiber.js'
+import type * as Fiber from './Fiber.js'
 import type { FiberRef } from './FiberRef.js'
 import type { FiberRefs } from './FiberRefs.js'
 import type { RuntimeOptions } from './FiberRuntime.js'
@@ -68,6 +68,8 @@ export function of<A>(a: A, __trace?: string): Effect<never, never, A> {
   return new I.Of(a, __trace)
 }
 
+export const unit: Effect<never, never, void> = of(undefined)
+
 export function fromCause<E>(cause: Cause<E>, __trace?: string): Effect<never, E, never> {
   return new I.FromCause(cause, __trace)
 }
@@ -104,6 +106,22 @@ export function map<A, B>(f: (a: A) => B, __trace?: string) {
 
 export function flatMap<A, R2, E2, B>(f: (a: A) => Effect<R2, E2, B>, __trace?: string) {
   return <R, E>(eff: Effect<R, E, A>): Effect<R | R2, E | E2, B> => new I.FlatMap([eff, f], __trace)
+}
+
+export function tap<A, R2, E2, B>(f: (a: A) => Effect<R2, E2, B>, __trace?: string) {
+  return <R, E>(eff: Effect<R, E, A>): Effect<R | R2, E | E2, A> =>
+    new I.FlatMap(
+      [
+        eff,
+        (a) =>
+          pipe(
+            a,
+            f,
+            map(() => a),
+          ),
+      ],
+      __trace,
+    )
 }
 
 export function matchCause<E, R2, E2, B, A, R3, E3, C>(
@@ -206,9 +224,18 @@ export const withFiberRefs =
 export const fork = <R, E, A>(
   effect: Effect<R, E, A>,
   __trace?: string,
-): Effect<R, never, Fiber<E, A>> => new I.Fork([effect], __trace)
+): Effect<R, never, Fiber.RuntimeFiber<E, A>> => new I.Fork([effect], __trace)
+
+export const join = <E, A>(fiber: Fiber.Fiber<E, A>, __trace?: string): Effect<never, E, A> =>
+  pipe(
+    fiber.exit,
+    tap((exit) => (isRight(exit) ? fiber.inheritRefs : unit)),
+    flatMap(fromExit, __trace),
+  )
 
 export const forkWithOptions =
   <R>(options: Partial<RuntimeOptions<R>>) =>
-  <E, A>(effect: Effect<R, E, A>, __trace?: string): Effect<R, never, Fiber<E, A>> =>
+  <E, A>(effect: Effect<R, E, A>, __trace?: string): Effect<R, never, Fiber.RuntimeFiber<E, A>> =>
     new I.Fork([effect, options], __trace)
+
+export const context = <R>(): Effect<R, never, Context<R>> => access(of)

@@ -1,7 +1,7 @@
 import * as C from '@fp-ts/data/Context'
+import { isRight } from '@fp-ts/data/Either'
 import { pipe } from '@fp-ts/data/Function'
 import * as Option from '@fp-ts/data/Option'
-import { isRight } from 'node_modules/@fp-ts/data/Either.js'
 
 import * as Effect from './Effect.js'
 import { FiberRef, FiberRefId } from './FiberRef.js'

@@ -1,4 +1,4 @@
-import { Tag } from 'node_modules/@fp-ts/data/Context.js'
+import { Tag } from '@fp-ts/data/Context'
 
 export interface IdGenerator {
   readonly tag: 'IdGenerator'

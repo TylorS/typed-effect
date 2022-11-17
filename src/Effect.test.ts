@@ -1,12 +1,12 @@
 import { deepStrictEqual } from 'assert'
 
 import { left } from '@fp-ts/data/Either'
-import { pipe } from 'node_modules/@fp-ts/data/Function.js'
+import { pipe } from '@fp-ts/data/Function'
 
 import { Expected } from './Cause.js'
 import * as Effect from './Effect.js'
+import { runMain, runMainExit } from './Runtime.js'
 import { makeScheduler } from './Scheduler.js'
-import { runMain, runMainExit } from './operators.js'
 
 describe(import.meta.url, () => {
   const scheduler = makeScheduler()

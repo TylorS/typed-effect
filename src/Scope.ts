@@ -3,7 +3,7 @@ import * as Either from '@fp-ts/data/Either'
 import { pipe } from '@fp-ts/data/Function'
 import * as Option from '@fp-ts/data/Option'
 
-import { combine } from './Cause.js'
+import { combineSequential } from './Cause.js'
 import { Disposable } from './Disposable.js'
 import * as Effect from './Effect.js'
 import { Exit } from './Exit.js'
@@ -52,7 +52,10 @@ export function makeScope(): Scope {
         const finalizerExit = yield* Effect.attempt(finalizer(exit))
 
         if (Either.isLeft(finalizerExit)) {
-          finalExit = pipe(finalExit, Option.map(Either.mapLeft(combine(finalizerExit.left))))
+          finalExit = pipe(
+            finalExit,
+            Option.map(Either.mapLeft(combineSequential(finalizerExit.left))),
+          )
         }
       }
 

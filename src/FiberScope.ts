@@ -1,14 +1,15 @@
-import { Tag } from 'node_modules/@fp-ts/data/Context.js'
+import { Tag } from '@fp-ts/data/Context'
 
-import { Effect } from './Effect.js'
+import * as Effect from './Effect.js'
 import { FiberId, None } from './FiberId.js'
 import type { FiberRuntime } from './FiberRuntime.js'
+import { zipAll } from './operators.js'
 
 export interface FiberScope {
   readonly id: FiberId
   readonly size: number
   readonly addChild: <R1, E1, A1>(child: FiberRuntime<R1, E1, A1>) => void
-  readonly interruptChildren: Effect<never, never, void>
+  readonly interruptChildren: Effect.Effect<never, never, void>
 }
 
 export function FiberScope(id: FiberId): FiberScope {
@@ -26,12 +27,9 @@ export function FiberScope(id: FiberId): FiberScope {
         children.delete(child)
       })
     },
-    interruptChildren: Effect(function* () {
-      // TODO: Concurrency
-      for (const child of children) {
-        yield* child.interruptAs(id)
-      }
-    }),
+    interruptChildren: Effect.lazy(() =>
+      Effect.map(() => void 0)(zipAll(Array.from(children).map((c) => c.interruptAs(id)))),
+    ),
   }
 
   return scope

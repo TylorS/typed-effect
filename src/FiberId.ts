@@ -1,14 +1,19 @@
+import { NonEmptyReadonlyArray } from '@fp-ts/data/ReadonlyArray'
+
 import { Time } from './Time.js'
 
-// TODO: Synthetic IDs
-
-export type FiberId = FiberId.Live | FiberId.None
+export type FiberId = FiberId.Live | FiberId.Synthetic | FiberId.None
 
 export namespace FiberId {
   export interface Live {
     readonly tag: 'Live'
     readonly id: number
     readonly startTime: Time
+  }
+
+  export interface Synthetic {
+    readonly tag: 'Synthetic'
+    readonly ids: NonEmptyReadonlyArray<FiberId>
   }
 
   export interface None {
@@ -21,6 +26,13 @@ export function Live(id: number, startTime: Time): FiberId.Live {
     tag: 'Live',
     id,
     startTime,
+  }
+}
+
+export function Synthetic(ids: NonEmptyReadonlyArray<FiberId>): FiberId.Synthetic {
+  return {
+    tag: 'Synthetic',
+    ids,
   }
 }
 

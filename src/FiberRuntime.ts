@@ -7,7 +7,7 @@ import { getDefaultService } from './DefaultServices.js'
 import { Disposable } from './Disposable.js'
 import { Effect } from './Effect.js'
 import { Exit } from './Exit.js'
-import type { Fiber } from './Fiber.js'
+import type { RuntimeFiber } from './Fiber.js'
 import { FiberId, Live } from './FiberId.js'
 import type { FiberRefs } from './FiberRefs.js'
 import { FiberScope } from './FiberScope.js'
@@ -37,7 +37,7 @@ export interface RuntimeOptions<R> {
   readonly flags: RuntimeFlags
 }
 
-export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Output> {
+export class FiberRuntime<Services, Errors, Output> implements RuntimeFiber<Errors, Output> {
   protected started = false
   protected instr!: I.Instruction<any, any, any> | null
   protected frames: Frame[] = []
@@ -58,7 +58,9 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
     this.setInstr(effect)
   }
 
-  readonly exit: Fiber<Errors, Output>['exit'] = new I.Lazy(() => {
+  readonly tag: RuntimeFiber<Errors, Output>['tag'] = 'Runtime'
+
+  readonly exit: RuntimeFiber<Errors, Output>['exit'] = new I.Lazy(() => {
     if (this.fiberStatus.tag === 'Done') {
       return new I.Of(this.fiberStatus.exit)
     }
@@ -70,9 +72,9 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
     return new I.Async(future)
   })
 
-  readonly inheritRefs: Fiber<Errors, Output>['inheritRefs'] = this.options.fiberRefs.inherit
+  readonly inheritRefs: RuntimeFiber<Errors, Output>['inheritRefs'] = this.options.fiberRefs.inherit
 
-  readonly addObserver: Fiber<Errors, Output>['addObserver'] = (observer) => {
+  readonly addObserver: RuntimeFiber<Errors, Output>['addObserver'] = (observer) => {
     this.observers.push(observer)
 
     return Disposable(() => {
@@ -84,16 +86,18 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
     })
   }
 
-  readonly interruptAs: Fiber<Errors, Output>['interruptAs'] = (id: FiberId) => {
+  readonly interruptAs: RuntimeFiber<Errors, Output>['interruptAs'] = (id: FiberId) => {
     this.interruptCause = pipe(
       this.interruptCause,
-      Cause.combine(new Cause.Interrupted(this.getUnixTime(), id)),
+      Cause.combineSequential(new Cause.Interrupted(this.getUnixTime(), id)),
     )
 
+    // Interrupt immediately if interruptable
     if (this.currentRuntimeFlags.current.interruptStatus) {
       this.continueWithCause(this.interruptCause)
     }
 
+    // Always wait for the exit value for synchronization
     return this.exit
   }
 
@@ -390,7 +394,7 @@ export class FiberRuntime<Services, Errors, Output> implements Fiber<Errors, Out
   }
 
   protected shouldInterrupt() {
-    return !this.interrupting && this.interruptCause.tag !== 'Empty'
+    return !this.interrupting && this.interruptCause.tag !== 'Empty' && this.frames.length > 0
   }
 
   protected interruptNow() {

@@ -2,13 +2,14 @@ import * as Context from '@fp-ts/data/Context'
 import { pipe } from '@fp-ts/data/Function'
 import * as Option from '@fp-ts/data/Option'
 
-import { makeDateClock } from './Clock.js'
-import { of } from './Effect.js'
+import { Clock, makeDateClock } from './Clock.js'
+import * as Effect from './Effect.js'
 import type { FiberRefs } from './FiberRefs.js'
 import { GlobalFiberScope, makeGlobalFiberScope } from './FiberScope.js'
 import { IdGenerator, makeIdGenerator } from './IdGenerator.js'
 import { Layer } from './Layer.js'
 import { Scheduler, makeScheduler } from './Scheduler.js'
+import { Time, UnixTime } from './Time.js'
 import { makeSetTimeoutTimer } from './Timer.js'
 
 export type DefaultServices = Scheduler | IdGenerator | GlobalFiberScope
@@ -29,8 +30,7 @@ export const DefaultServicesContext: Context.Context<DefaultServices> = pipe(
 )
 
 export const DefaultServices: Layer<never, never, DefaultServices> = Layer(
-  'DefaultServices',
-  of(DefaultServicesContext),
+  Effect.of(DefaultServicesContext),
 )
 
 export const getDefaultService = <R, S extends DefaultServices>(
@@ -50,3 +50,38 @@ export const getDefaultService = <R, S extends DefaultServices>(
     Context.get(service as Context.Tags<S>),
   ) as S
 }
+
+export const getScheduler: Effect.Effect<never, never, Scheduler> = Effect.Effect(function* () {
+  const ctx = yield* Effect.context<never>()
+  const fiberRefs = yield* Effect.getFiberRefs
+
+  return getDefaultService(ctx, fiberRefs, Scheduler)
+})
+
+export const getIdGenerator: Effect.Effect<never, never, IdGenerator> = Effect.Effect(function* () {
+  const ctx = yield* Effect.context<never>()
+  const fiberRefs = yield* Effect.getFiberRefs
+
+  return getDefaultService(ctx, fiberRefs, IdGenerator)
+})
+
+export const getGlobalFiberScope: Effect.Effect<never, never, GlobalFiberScope> = Effect.Effect(
+  function* () {
+    const ctx = yield* Effect.context<never>()
+    const fiberRefs = yield* Effect.getFiberRefs
+
+    return getDefaultService(ctx, fiberRefs, GlobalFiberScope)
+  },
+)
+
+export const getClock: Effect.Effect<never, never, Clock> = getScheduler
+
+export const getCurrentTime: Effect.Effect<never, never, Time> = pipe(
+  getClock,
+  Effect.map((c) => c.time.get()),
+)
+
+export const getCurrentUnixTime: Effect.Effect<never, never, UnixTime> = pipe(
+  getClock,
+  Effect.map((c) => c.unixTime.get()),
+)

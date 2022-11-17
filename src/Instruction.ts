@@ -10,7 +10,6 @@ import type { RuntimeFlags } from './RuntimeFlags.js'
 
 // TODO: Semaphores
 // TODO: Ref Profunctor
-// TODO: Concurrency
 
 export type Instruction<R, E, A> =
   | AccessContext<R, R, E, A>

@@ -1,6 +1,6 @@
 import * as Context from '@fp-ts/data/Context'
 import { Duration } from '@fp-ts/data/Duration'
-import { pipe } from 'node_modules/@fp-ts/data/Function.js'
+import { pipe } from '@fp-ts/data/Function'
 
 import { Clock } from './Clock.js'
 import { DefaultServices } from './DefaultServices.js'
@@ -73,7 +73,6 @@ export function makeTestScheduler(timer: TestTimer): TestScheduler {
 export type TestServices = TestScheduler
 
 export const TestServices: Layer<never, never, TestServices | DefaultServices> = Layer(
-  'TestServices',
   sync(() => {
     const clock = makeTestClock()
     const timer = makeTestTimer(clock)

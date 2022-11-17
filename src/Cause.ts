@@ -13,7 +13,7 @@ export type Cause<E> =
   | Traced<E>
 
 export class CauseError<E> extends Error {
-  constructor(readonly cause: Cause<E>) {
+  constructor(readonly causedBy: Cause<E>) {
     super() // TODO: Pretty printing
   }
 }
@@ -53,11 +53,20 @@ export class Traced<E> {
   constructor(readonly cause: Cause<E>, readonly trace: string) {}
 }
 
-export const combine =
+export const combineSequential =
   <E2 = never>(y: Cause<E2>) =>
   <E = never>(x: Cause<E>): Cause<E | E2> =>
     x.tag === 'Empty' ? y : y.tag === 'Empty' ? x : new Sequential<E | E2>(x, y)
 
 export function makeSequentialSemigroup<E>(): Semigroup.Semigroup<Cause<E>> {
-  return Semigroup.fromCombine(combine)
+  return Semigroup.fromCombine(combineSequential)
+}
+
+export const combineConcurrent =
+  <E2 = never>(y: Cause<E2>) =>
+  <E = never>(x: Cause<E>): Cause<E | E2> =>
+    x.tag === 'Empty' ? y : y.tag === 'Empty' ? x : new Concurrent<E | E2>(x, y)
+
+export function makeConcurrentSemigroup<E>(): Semigroup.Semigroup<Cause<E>> {
+  return Semigroup.fromCombine(combineConcurrent)
 }
