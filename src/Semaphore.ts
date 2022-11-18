@@ -1,4 +1,4 @@
-import { pipe } from 'node_modules/@fp-ts/data/Function.js'
+import { pipe } from '@fp-ts/data/Function'
 
 import * as Effect from './Effect.js'
 import { Future, pending } from './Future.js'
