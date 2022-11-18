@@ -1,3 +1,4 @@
+import * as Context from '@fp-ts/data/Context'
 import * as Either from '@fp-ts/data/Either'
 import { pipe } from '@fp-ts/data/Function'
 
@@ -40,8 +41,6 @@ export function Runtime<R>(options: RuntimeOptions<R>): Runtime<R> {
   const scheduler = getDefaultService(options.context, options.fiberRefs, Scheduler)
   const makeNextId = getDefaultService(options.context, options.fiberRefs, IdGenerator)
   const makeNextFiberId = () => Live(makeNextId(), scheduler.time.get())
-
-  // TODO: Fork FiberRefs + Scheduler
   const makeOptions = (overrides?: Partial<RuntimeOptions<R>>): RuntimeOptions<R> => ({
     ...options,
     ...overrides,
@@ -51,7 +50,13 @@ export function Runtime<R>(options: RuntimeOptions<R>): Runtime<R> {
     const id = makeNextFiberId()
     const opts = makeOptions(overrides)
     const scope = FiberScope(id)
-    const child = new FiberRuntime(effect, id, { ...opts, scope })
+    const child = new FiberRuntime(effect, {
+      id,
+      context: pipe(opts.context, Context.add(Scheduler)(scheduler.fork())),
+      fiberRefs: opts.fiberRefs.fork(),
+      scope,
+      flags: opts.flags,
+    })
 
     opts.scope.addChild(child)
 
@@ -86,6 +91,7 @@ export function Runtime<R>(options: RuntimeOptions<R>): Runtime<R> {
 }
 
 export const DefaultRuntime: Runtime<DefaultServices> = Runtime({
+  id: None,
   context: DefaultServicesContext,
   scope: FiberScope(None),
   fiberRefs: makeFiberRefs(),
@@ -93,7 +99,7 @@ export const DefaultRuntime: Runtime<DefaultServices> = Runtime({
 })
 
 export const {
-  forkFiber: forkMainFiber,
+  forkFiber: forkMainFiberUnstarted,
   runWith: runMainWith,
   runPromise: runMain,
   runPromiseExit: runMainExit,

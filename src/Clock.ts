@@ -13,14 +13,14 @@ export interface Clock {
     readonly get: () => UnixTime
     readonly delay: (duration: Duration) => UnixTime
   }
+
+  readonly fork: () => Clock
 }
 
 export const Clock = C.Tag<Clock>()
 
-export function makeDateClock(): Clock {
-  const startTime = Date.now()
-
-  return {
+export function makeDateClock(startTime: UnixTime = UnixTime(Date.now())): Clock {
+  const clock: Clock = {
     startTime: UnixTime(startTime),
     time: {
       get: () => Time(Date.now() - startTime),
@@ -30,5 +30,8 @@ export function makeDateClock(): Clock {
       get: () => UnixTime(Date.now()),
       delay: (duration) => UnixTime(Date.now() + duration.millis),
     },
+    fork: () => makeDateClock(),
   }
+
+  return clock
 }

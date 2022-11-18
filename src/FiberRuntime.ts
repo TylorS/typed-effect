@@ -1,4 +1,4 @@
-import { Context } from '@fp-ts/data/Context'
+import * as Context from '@fp-ts/data/Context'
 import * as Either from '@fp-ts/data/Either'
 import { pipe } from '@fp-ts/data/Function'
 
@@ -31,37 +31,42 @@ import { Scheduler } from './Scheduler.js'
 import { NonEmptyMutableStack } from './_internal.js'
 
 export interface RuntimeOptions<R> {
-  readonly context: Context<R>
+  readonly id: FiberId
+  readonly context: Context.Context<R>
   readonly scope: FiberScope
   readonly fiberRefs: FiberRefs
   readonly flags: RuntimeFlags
 }
 
 export class FiberRuntime<Services, Errors, Output> implements RuntimeFiber<Errors, Output> {
-  protected started = false
-  protected instr!: I.Instruction<any, any, any> | null
-  protected frames: Frame[] = []
   protected disposable: Disposable.Settable = Disposable.settable()
-  protected observers: ((exit: Exit<Errors, Output>) => void)[] = []
-  protected interrupting = false
-  protected interruptCause: Cause.Cause<Errors> = new Cause.Empty()
-  protected currentContext: NonEmptyMutableStack<Context<any>>
-  protected currentFiberRefs: NonEmptyMutableStack<FiberRefs>
-  protected currentRuntimeFlags: NonEmptyMutableStack<RuntimeFlags>
+  protected currentContext: NonEmptyMutableStack<Context.Context<any>> = new NonEmptyMutableStack(
+    this.options.context,
+  )
+  protected currentFiberRefs: NonEmptyMutableStack<FiberRefs> = new NonEmptyMutableStack(
+    this.options.fiberRefs,
+  )
+  protected currentRuntimeFlags: NonEmptyMutableStack<RuntimeFlags> = new NonEmptyMutableStack(
+    this.options.flags,
+  )
   protected fiberStatus: FiberStatus.FiberStatus<Errors, Output> = FiberStatus.Pending
+  protected frames: Frame[] = []
+  protected instr!: I.Instruction<any, any, any> | null
+  protected interruptCause: Cause.Cause<Errors> = new Cause.Empty()
+  protected interrupting = false
+  protected observers: ((exit: Exit<Errors, Output>) => void)[] = []
+  protected started = false
 
   constructor(
     readonly effect: Effect<Services, Errors, Output>,
-    readonly id: FiberId,
     readonly options: RuntimeOptions<Services>,
   ) {
     this.setInstr(effect)
-    this.currentContext = new NonEmptyMutableStack(options.context)
-    this.currentFiberRefs = new NonEmptyMutableStack(options.fiberRefs)
-    this.currentRuntimeFlags = new NonEmptyMutableStack(options.flags)
   }
 
   readonly tag: RuntimeFiber<Errors, Output>['tag'] = 'Runtime'
+
+  readonly id: RuntimeFiber<Errors, Output>['id'] = this.options.id
 
   readonly exit: RuntimeFiber<Errors, Output>['exit'] = new I.Lazy(() => {
     if (this.fiberStatus.tag === 'Done') {
@@ -107,14 +112,14 @@ export class FiberRuntime<Services, Errors, Output> implements RuntimeFiber<Erro
   }
 
   // Only public to users of FiberRuntime directly
-  public start() {
+  public start(): boolean {
     if (this.started) {
       return false
     }
 
     this.loop()
 
-    this.started = true
+    return (this.started = true)
   }
 
   // Internals
@@ -233,6 +238,10 @@ export class FiberRuntime<Services, Errors, Output> implements RuntimeFiber<Erro
     this.setInstr(effect)
   }
 
+  protected GetFiberId() {
+    this.continueWith(this.options.id)
+  }
+
   protected GetRuntimeOptions() {
     this.continueWith(this.getCurrentRuntimeOptions())
   }
@@ -240,13 +249,18 @@ export class FiberRuntime<Services, Errors, Output> implements RuntimeFiber<Erro
   protected Fork(instr: I.Fork<any, any, any>) {
     const [effect, overrides] = instr.input
     const id = Live(this.getNextId(), this.getTime())
-    // TODO: Fork FiberRefs + Scheduler
     const options = {
       ...this.getCurrentRuntimeOptions(),
       ...overrides,
     }
     const scope = FiberScope(id)
-    const child = new FiberRuntime(effect, id, { ...options, scope })
+    const child = new FiberRuntime(effect, {
+      ...options,
+      id,
+      fiberRefs: options.fiberRefs.fork(),
+      context: pipe(options.context, Context.add(Scheduler)(this.getScheduler().fork())),
+      scope,
+    })
 
     options.scope.addChild(child)
     child.start()
@@ -302,7 +316,7 @@ export class FiberRuntime<Services, Errors, Output> implements RuntimeFiber<Erro
         return this.setInstr(frame.g(value))
       case 'Pop': {
         frame.f()
-        break
+        return this.continueWith(value)
       }
       case 'Interrupt': {
         if (this.shouldInterrupt()) {
@@ -323,14 +337,13 @@ export class FiberRuntime<Services, Errors, Output> implements RuntimeFiber<Erro
 
     switch (frame.tag) {
       case 'Match':
-        return this.setInstr(frame.f(cause))
       case 'FlatMapCause':
         return this.setInstr(frame.f(cause))
       case 'MapCause':
         return this.continueWithCause(frame.f(cause))
       case 'Pop': {
         frame.f()
-        break
+        return this.continueWithCause(cause)
       }
       case 'Interrupt': {
         if (this.shouldInterrupt()) {

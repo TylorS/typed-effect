@@ -18,6 +18,8 @@ export interface Scheduler extends Clock, Disposable {
     effect: Effect<R, E, A>,
     schedule: Schedule,
   ) => Effect<R | R2, E | E2, ScheduleState>
+
+  readonly fork: () => Scheduler
 }
 
 export const Scheduler = Tag<Scheduler>()
@@ -105,13 +107,31 @@ export function makeScheduler(timer: Timer = makeSetTimeoutTimer()): Scheduler {
       return state
     })
 
-  return {
+  const scheduler: Scheduler = {
     startTime: timer.startTime,
     time: timer.time,
     unixTime: timer.unixTime,
     dispose: disposable.dispose,
     delay,
     schedule,
+    fork: (): Scheduler => new ForkScheduler(scheduler, timer.fork()),
+  }
+
+  return scheduler
+}
+
+class ForkScheduler implements Scheduler {
+  readonly startTime = this.timer.startTime
+  readonly time = this.timer.time
+  readonly unixTime = this.timer.unixTime
+  readonly dispose = this.scheduler.dispose
+  readonly delay = this.scheduler.delay
+  readonly schedule = this.scheduler.schedule
+
+  constructor(readonly scheduler: Scheduler, readonly timer: Timer) {}
+
+  fork(): Scheduler {
+    return new ForkScheduler(this.scheduler, this.timer.fork())
   }
 }
 

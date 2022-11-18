@@ -7,6 +7,7 @@ import { Time } from './Time.js'
 
 export interface Timer extends Clock {
   readonly setTimer: (f: (time: Time) => void, duration: Duration.Duration) => Disposable
+  readonly fork: () => Timer
 }
 
 export const Timer = Tag<Timer>()
@@ -15,6 +16,7 @@ export function make(clock: Clock, setTimer: Timer['setTimer']): Timer {
   return {
     ...clock,
     setTimer,
+    fork: () => make(clock.fork(), setTimer),
   }
 }
 

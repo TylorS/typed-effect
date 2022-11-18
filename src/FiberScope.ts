@@ -1,19 +1,19 @@
 import { Tag } from '@fp-ts/data/Context'
 
 import * as Effect from './Effect.js'
+import type { RuntimeFiber } from './Fiber.js'
 import { FiberId, None } from './FiberId.js'
-import type { FiberRuntime } from './FiberRuntime.js'
 import { zipAll } from './operators.js'
 
 export interface FiberScope {
   readonly id: FiberId
   readonly size: number
-  readonly addChild: <R1, E1, A1>(child: FiberRuntime<R1, E1, A1>) => void
+  readonly addChild: <E1, A1>(child: RuntimeFiber<E1, A1>) => void
   readonly interruptChildren: Effect.Effect<never, never, void>
 }
 
 export function FiberScope(id: FiberId): FiberScope {
-  const children = new Set<FiberRuntime<any, any, any>>()
+  const children = new Set<RuntimeFiber<any, any>>()
 
   const scope: FiberScope = {
     id,
@@ -28,7 +28,9 @@ export function FiberScope(id: FiberId): FiberScope {
       })
     },
     interruptChildren: Effect.lazy(() =>
-      Effect.map(() => void 0)(zipAll(Array.from(children).map((c) => c.interruptAs(id)))),
+      Effect.map(() => children.clear())(
+        zipAll(Array.from(children).map((c) => c.interruptAs(id))),
+      ),
     ),
   }
 

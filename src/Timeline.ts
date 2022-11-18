@@ -35,7 +35,7 @@ export function Timeline<A>(onUpdated?: () => void): Timeline<A> {
 class TimelineImpl<A> implements Timeline<A> {
   protected timeSlots: TimeSlot<A>[] = []
 
-  constructor(readonly onUpdated?: () => void) {}
+  constructor(public onUpdated?: () => void) {}
 
   readonly nextArrival = (): UnixTime => {
     if (this.isEmpty()) {
