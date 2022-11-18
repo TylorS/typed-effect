@@ -6,6 +6,7 @@ import { Option } from '@fp-ts/data/Option'
 import { Cause, CauseError } from './Cause.js'
 import type { Exit } from './Exit.js'
 import type * as Fiber from './Fiber.js'
+import { FiberId } from './FiberId.js'
 import type { FiberRef } from './FiberRef.js'
 import type { FiberRefs } from './FiberRefs.js'
 import type { RuntimeOptions } from './FiberRuntime.js'
@@ -171,6 +172,8 @@ export function interruptable<R, E, A>(eff: Effect<R, E, A>, __trace?: string): 
 export const getFiberRefs: Effect<never, never, FiberRefs> = new I.GetFiberRefs()
 
 export const getFiberScope: Effect<never, never, FiberScope> = new I.GetFiberScope()
+
+export const getFiberId: Effect<never, never, FiberId> = new I.GetFiberId()
 
 export const getRuntimeFlags: Effect<never, never, RuntimeFlags> = new I.GetRuntimeFlags()
 

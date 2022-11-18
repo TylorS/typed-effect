@@ -4,14 +4,17 @@ import { pipe } from '@fp-ts/data/Function'
 import * as Option from '@fp-ts/data/Option'
 
 import { combineSequential } from './Cause.js'
+import { forkDaemon } from './DefaultServices.js'
 import { Disposable } from './Disposable.js'
 import * as Effect from './Effect.js'
 import { Exit } from './Exit.js'
-import { provideService } from './operators.js'
+import { RuntimeFiber } from './Fiber.js'
+import { asksEffect, provideService } from './operators.js'
 
 export interface Scope {
   readonly addFinalizer: (finalizer: Finalizer) => Effect.Effect<never, never, Disposable>
   readonly close: (exit: Exit<any, any>) => Effect.Effect<never, never, boolean>
+  readonly fork: Effect.Effect<never, never, Scope>
 }
 
 export const Scope = Tag<Scope>()
@@ -65,14 +68,24 @@ export function makeScope(): Scope {
       return true
     })
 
+  const fork = Effect.Effect(function* () {
+    const child = makeScope()
+    const disposable = yield* addFinalizer((exit) => child.close(exit))
+
+    yield* child.addFinalizer(() => Effect.sync(() => disposable.dispose()))
+
+    return child
+  })
+
   return {
     addFinalizer,
     close,
+    fork,
   }
 }
 
 export interface Finalizer {
-  (exit: Exit<any, any>): Effect.Effect<never, never, void>
+  (exit: Exit<any, any>): Effect.Effect<never, never, unknown>
 }
 
 export function scoped<R, E, A>(
@@ -83,4 +96,36 @@ export function scoped<R, E, A>(
 
     return pipe(effect, provideService(Scope, scope), Effect.onExit(scope.close))
   })
+}
+
+export function forkScoped<R, E, A>(
+  effect: Effect.Effect<R | Scope, E, A>,
+): Effect.Effect<R | Scope, never, RuntimeFiber<E, A>> {
+  return pipe(
+    asksEffect(Scope, (s) => s.fork),
+    Effect.flatMap((scope) =>
+      pipe(
+        Effect.getFiberId,
+        Effect.flatMap((id) =>
+          pipe(
+            effect,
+            provideService(Scope, scope),
+            Effect.onExit(scope.close),
+            forkDaemon,
+            Effect.tap((fiber) =>
+              scope.addFinalizer(() =>
+                pipe(
+                  Effect.getFiberId,
+                  Effect.flatMap(
+                    (childId): Effect.Effect<never, never, unknown> =>
+                      childId === id ? Effect.unit : fiber.interruptAs(id),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  )
 }

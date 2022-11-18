@@ -85,3 +85,10 @@ export const getCurrentUnixTime: Effect.Effect<never, never, UnixTime> = pipe(
   getClock,
   Effect.map((c) => c.unixTime.get()),
 )
+
+export function forkDaemon<R, E, A>(effect: Effect.Effect<R, E, A>) {
+  return pipe(
+    getGlobalFiberScope,
+    Effect.flatMap((scope) => pipe(effect, Effect.forkWithOptions({ scope }))),
+  )
+}
