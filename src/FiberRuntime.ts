@@ -45,9 +45,9 @@ export class FiberRuntime<Services, Errors, Output> implements RuntimeFiber<Erro
   protected observers: ((exit: Exit<Errors, Output>) => void)[] = []
   protected interrupting = false
   protected interruptCause: Cause.Cause<Errors> = new Cause.Empty()
-  protected currentContext = new NonEmptyMutableStack(this.options.context)
-  protected currentFiberRefs = new NonEmptyMutableStack(this.options.fiberRefs)
-  protected currentRuntimeFlags = new NonEmptyMutableStack(this.options.flags)
+  protected currentContext: NonEmptyMutableStack<Context<any>>
+  protected currentFiberRefs: NonEmptyMutableStack<FiberRefs>
+  protected currentRuntimeFlags: NonEmptyMutableStack<RuntimeFlags>
   protected fiberStatus: FiberStatus.FiberStatus<Errors, Output> = FiberStatus.Pending
 
   constructor(
@@ -56,6 +56,9 @@ export class FiberRuntime<Services, Errors, Output> implements RuntimeFiber<Erro
     readonly options: RuntimeOptions<Services>,
   ) {
     this.setInstr(effect)
+    this.currentContext = new NonEmptyMutableStack(options.context)
+    this.currentFiberRefs = new NonEmptyMutableStack(options.fiberRefs)
+    this.currentRuntimeFlags = new NonEmptyMutableStack(options.flags)
   }
 
   readonly tag: RuntimeFiber<Errors, Output>['tag'] = 'Runtime'
@@ -72,7 +75,9 @@ export class FiberRuntime<Services, Errors, Output> implements RuntimeFiber<Erro
     return new I.Async(future)
   })
 
-  readonly inheritRefs: RuntimeFiber<Errors, Output>['inheritRefs'] = this.options.fiberRefs.inherit
+  get inheritRefs(): RuntimeFiber<Errors, Output>['inheritRefs'] {
+    return this.currentFiberRefs.current.inherit
+  }
 
   readonly addObserver: RuntimeFiber<Errors, Output>['addObserver'] = (observer) => {
     this.observers.push(observer)
@@ -235,6 +240,7 @@ export class FiberRuntime<Services, Errors, Output> implements RuntimeFiber<Erro
   protected Fork(instr: I.Fork<any, any, any>) {
     const [effect, overrides] = instr.input
     const id = Live(this.getNextId(), this.getTime())
+    // TODO: Fork FiberRefs + Scheduler
     const options = {
       ...this.getCurrentRuntimeOptions(),
       ...overrides,
@@ -294,6 +300,10 @@ export class FiberRuntime<Services, Errors, Output> implements RuntimeFiber<Erro
         return this.continueWith(frame.f(value))
       case 'Match':
         return this.setInstr(frame.g(value))
+      case 'Pop': {
+        frame.f()
+        break
+      }
       case 'Interrupt': {
         if (this.shouldInterrupt()) {
           return this.interruptNow()
@@ -318,6 +328,10 @@ export class FiberRuntime<Services, Errors, Output> implements RuntimeFiber<Erro
         return this.setInstr(frame.f(cause))
       case 'MapCause':
         return this.continueWithCause(frame.f(cause))
+      case 'Pop': {
+        frame.f()
+        break
+      }
       case 'Interrupt': {
         if (this.shouldInterrupt()) {
           return this.interruptNow()

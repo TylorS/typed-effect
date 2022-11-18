@@ -7,6 +7,7 @@ import { combineSequential } from './Cause.js'
 import { Disposable } from './Disposable.js'
 import * as Effect from './Effect.js'
 import { Exit } from './Exit.js'
+import { provideService } from './operators.js'
 
 export interface Scope {
   readonly addFinalizer: (finalizer: Finalizer) => Effect.Effect<never, never, Disposable>
@@ -72,4 +73,14 @@ export function makeScope(): Scope {
 
 export interface Finalizer {
   (exit: Exit<any, any>): Effect.Effect<never, never, void>
+}
+
+export function scoped<R, E, A>(
+  effect: Effect.Effect<R | Scope, E, A>,
+): Effect.Effect<Exclude<R, Scope>, E, A> {
+  return Effect.lazy(() => {
+    const scope = makeScope()
+
+    return pipe(effect, provideService(Scope, scope), Effect.onExit(scope.close))
+  })
 }

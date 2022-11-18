@@ -6,20 +6,29 @@ import * as Option from '@fp-ts/data/Option'
 import * as Effect from './Effect.js'
 import { FiberRef, FiberRefId } from './FiberRef.js'
 import { Future, pending } from './Future.js'
-
-// TODO: Effect variants + Semaphore
+import { Lock, Semaphore, withPermit } from './Semaphore.js'
 
 export interface FiberRefs {
   readonly getReferences: () => ReadonlyMap<FiberRef<any, any, any>, any>
   readonly getOption: <R, E, A>(fiberRef: FiberRef<R, E, A>) => Option.Option<A>
   readonly get: <R, E, A>(fiberRef: FiberRef<R, E, A>) => Effect.Effect<R, E, A>
   readonly set: <R, E, A>(fiberRef: FiberRef<R, E, A>, a: A) => Effect.Effect<never, never, A>
+  readonly update: <R, E, A>(fiberRef: FiberRef<R, E, A>, f: (a: A) => A) => Effect.Effect<R, E, A>
   readonly modify: <R, E, A, B>(
     fiberRef: FiberRef<R, E, A>,
     f: (a: A) => readonly [B, A],
   ) => Effect.Effect<R, E, B>
   readonly delete: <R, E, A>(fiberRef: FiberRef<R, E, A>) => Effect.Effect<R, E, Option.Option<A>>
   readonly inherit: Effect.Effect<never, never, void>
+  readonly modifyEffect: <R, E, A, R2, E2, B>(
+    fiberRef: FiberRef<R, E, A>,
+    f: (a: A) => Effect.Effect<R2, E2, readonly [B, A]>,
+  ) => Effect.Effect<R | R2, E | E2, B>
+
+  readonly updateEffect: <R, E, A, R2, E2>(
+    fiberRef: FiberRef<R, E, A>,
+    f: (a: A) => Effect.Effect<R2, E2, A>,
+  ) => Effect.Effect<R | R2, E | E2, A>
 }
 
 export const FiberRefs = C.Tag<FiberRefs>()
@@ -34,6 +43,17 @@ export function makeFiberRefs(
     Array.from(references).map(([fiberRef]) => [fiberRef.id, fiberRef]),
   )
   const initializing = new Map<FiberRefId<any>, Future<any, any, any>>()
+  const locks = new Map<FiberRefId<any>, Semaphore>()
+
+  function fiberRefScoped(id: FiberRefId<any>) {
+    return <R, E, A>(effect: Effect.Effect<R, E, A>) => {
+      if (!locks.has(id)) {
+        locks.set(id, Lock())
+      }
+
+      return pipe(effect, withPermit(locks.get(id) as Semaphore))
+    }
+  }
 
   const getReferences = () => {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -82,38 +102,55 @@ export function makeFiberRefs(
       Option.match(() => initialize(fiberRef), Effect.of),
     )
 
-  const set: FiberRefs['set'] = (fiberRef, a) =>
-    Effect.sync(() => {
-      valuesById.set(fiberRef.id, a)
-      refsById.set(fiberRef.id, fiberRef)
-
-      return a
-    })
-
-  const modify: FiberRefs['modify'] = (fiberRef, f) =>
+  const modifyEffect: FiberRefs['modifyEffect'] = (fiberRef, f) =>
     pipe(
       get(fiberRef),
-      Effect.flatMap((a) =>
+      Effect.flatMap(f),
+      Effect.flatMap(([b, a]) =>
         Effect.sync(() => {
-          const [b, a_] = f(a)
-
-          valuesById.set(fiberRef.id, a_)
+          valuesById.set(fiberRef.id, a)
           refsById.set(fiberRef.id, fiberRef)
 
           return b
         }),
       ),
+      fiberRefScoped(fiberRef.id),
+    )
+
+  const modify: FiberRefs['modify'] = (fiberRef, f) =>
+    modifyEffect(fiberRef, (a) => Effect.of(f(a)))
+
+  const update: FiberRefs['update'] = (fiberRef, f) =>
+    modify(fiberRef, (a) => {
+      const a2 = f(a)
+
+      return [a2, a2]
+    })
+
+  const set: FiberRefs['set'] = (fiberRef, a) =>
+    pipe(
+      Effect.sync(() => {
+        valuesById.set(fiberRef.id, a)
+        refsById.set(fiberRef.id, fiberRef)
+
+        return a
+      }),
+      fiberRefScoped(fiberRef.id),
     )
 
   const delete_: FiberRefs['delete'] = (fiberRef) =>
-    Effect.sync(() => {
-      const option = getOption(fiberRef)
+    pipe(
+      Effect.sync(() => {
+        const option = getOption(fiberRef)
 
-      valuesById.delete(fiberRef.id)
-      refsById.delete(fiberRef.id)
+        valuesById.delete(fiberRef.id)
+        refsById.delete(fiberRef.id)
+        locks.delete(fiberRef.id)
 
-      return option
-    })
+        return option
+      }),
+      fiberRefScoped(fiberRef.id),
+    )
 
   const inherit: FiberRefs['inherit'] = pipe(
     Effect.getFiberRefs,
@@ -139,9 +176,18 @@ export function makeFiberRefs(
     getOption,
     get,
     set,
+    update,
     modify,
     delete: delete_,
     inherit,
+    modifyEffect,
+    updateEffect: (fiberRef, f) =>
+      modifyEffect(fiberRef, (a) =>
+        pipe(
+          f(a),
+          Effect.map((a) => [a, a]),
+        ),
+      ),
   }
 
   return refs

@@ -1,5 +1,5 @@
 import type { Context } from '@fp-ts/data/Context'
-import { isRight, left, right } from '@fp-ts/data/Either'
+import * as Either from '@fp-ts/data/Either'
 import { pipe } from '@fp-ts/data/Function'
 import { Option } from '@fp-ts/data/Option'
 
@@ -137,7 +137,7 @@ export function attempt<R, E, A>(
   eff: Effect<R, E, A>,
   __trace?: string,
 ): Effect<R, never, Exit<E, A>> {
-  return pipe(eff, matchCause(flow2(left, of), flow2(right, of), __trace))
+  return pipe(eff, matchCause(flow2(Either.left, of), flow2(Either.right, of), __trace))
 }
 
 export function flatMapCause<E, R2, E2, B>(
@@ -205,13 +205,7 @@ export const updateFiberRef =
   <R, E>(ref: FiberRef<R, E, A>): Effect<R, E, A> =>
     pipe(
       getFiberRefs,
-      flatMap((refs) =>
-        refs.modify(ref, (a) => {
-          const a1 = f(a)
-
-          return [a1, a1]
-        }),
-      ),
+      flatMap((refs) => refs.update(ref, f)),
     )
 
 export const modifyFiberRef =
@@ -230,6 +224,22 @@ export const removeFiberRef = <R, E, A>(ref: FiberRef<R, E, A>): Effect<R, E, Op
 
 export { removeFiberRef as deleteFiberRef }
 
+export const updateFiberRefEffect =
+  <A, R2, E2>(f: (a: A) => Effect<R2, E2, A>) =>
+  <R, E>(ref: FiberRef<R, E, A>): Effect<R2 | R, E2 | E, A> =>
+    pipe(
+      getFiberRefs,
+      flatMap((refs) => refs.updateEffect(ref, f)),
+    )
+
+export const modifyFiberRefEffect =
+  <A, R2, E2, B>(f: (a: A) => Effect<R2, E2, readonly [B, A]>) =>
+  <R, E>(ref: FiberRef<R, E, A>): Effect<R2 | R, E2 | E, B> =>
+    pipe(
+      getFiberRefs,
+      flatMap((refs) => refs.modifyEffect(ref, f)),
+    )
+
 export const withFiberRefs =
   (refs: FiberRefs, __trace?: string) =>
   <R, E, A>(effect: Effect<R, E, A>): Effect<R, E, A> =>
@@ -243,7 +253,7 @@ export const fork = <R, E, A>(
 export const join = <E, A>(fiber: Fiber.Fiber<E, A>, __trace?: string): Effect<never, E, A> =>
   pipe(
     fiber.exit,
-    tap((exit) => (isRight(exit) ? fiber.inheritRefs : unit)),
+    tap((exit) => (Either.isRight(exit) ? fiber.inheritRefs : unit)),
     flatMap(fromExit, __trace),
   )
 
@@ -253,3 +263,10 @@ export const forkWithOptions =
     new I.Fork([effect, options], __trace)
 
 export const context = <R>(): Effect<R, never, Context<R>> => access(of)
+
+export const onExit =
+  <E, A, R2, E2, B>(
+    f: (exit: Exit<E, A>) => Effect<R2, E2, B>,
+  ): (<R>(effect: Effect<R, E, A>) => Effect<R | R2, E | E2, A>) =>
+  (effect) =>
+    pipe(effect, attempt, tap(f), flatMap(fromExit))

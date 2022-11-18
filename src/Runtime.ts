@@ -40,6 +40,8 @@ export function Runtime<R>(options: RuntimeOptions<R>): Runtime<R> {
   const scheduler = getDefaultService(options.context, options.fiberRefs, Scheduler)
   const makeNextId = getDefaultService(options.context, options.fiberRefs, IdGenerator)
   const makeNextFiberId = () => Live(makeNextId(), scheduler.time.get())
+
+  // TODO: Fork FiberRefs + Scheduler
   const makeOptions = (overrides?: Partial<RuntimeOptions<R>>): RuntimeOptions<R> => ({
     ...options,
     ...overrides,
@@ -52,7 +54,6 @@ export function Runtime<R>(options: RuntimeOptions<R>): Runtime<R> {
     const child = new FiberRuntime(effect, id, { ...opts, scope })
 
     opts.scope.addChild(child)
-    child.start()
 
     return child
   }
