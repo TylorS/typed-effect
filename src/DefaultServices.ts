@@ -47,8 +47,8 @@ export const getDefaultService = <R, S extends DefaultServices>(
   return pipe(
     fiberRefs.getOption(DefaultServices),
     Option.getOrElse(DefaultServicesContext),
-    Context.get(service as Context.Tags<S>),
-  ) as S
+    Context.unsafeGet(service),
+  )
 }
 
 export const getScheduler: Effect.Effect<never, never, Scheduler> = Effect.Effect(function* () {

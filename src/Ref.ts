@@ -10,6 +10,13 @@ export interface Ref<R, E, I, O = I> {
   readonly delete: Effect.Effect<R, E, Option.Option<O>>
 }
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
+export type ResourcesOf<T> = T extends Ref<infer R, infer _E, infer _I, infer _O> ? R : never
+export type ErrorsOf<T> = T extends Ref<infer _R, infer E, infer _I, infer _O> ? E : never
+export type InputOf<T> = T extends Ref<infer _R, infer _E, infer I, infer _O> ? I : never
+export type OutputOf<T> = T extends Ref<infer _R, infer _E, infer _I, infer O> ? O : never
+/* eslint-enable @typescript-eslint/no-unused-vars */
+
 export function fromFiberRef<R, E, A>(fiberRef: FiberRef.FiberRef<R, E, A>): Ref<R, E, A> {
   return {
     get: Effect.getFiberRef(fiberRef),

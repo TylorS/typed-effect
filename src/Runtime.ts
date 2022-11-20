@@ -44,17 +44,19 @@ export function Runtime<R>(options: RuntimeOptions<R>): Runtime<R> {
   const makeOptions = (overrides?: Partial<RuntimeOptions<R>>): RuntimeOptions<R> => ({
     ...options,
     ...overrides,
+    context: pipe(overrides?.context ?? options.context, Context.add(Scheduler)(scheduler.fork())),
+    fiberRefs: overrides?.fiberRefs ?? options.fiberRefs.fork(),
   })
 
   const forkFiber: Runtime<R>['forkFiber'] = (effect, overrides) => {
     const id = makeNextFiberId()
-    const opts = makeOptions(overrides)
     const scope = FiberScope(id)
+    const opts = makeOptions(overrides)
     const child = new FiberRuntime(effect, {
       id,
-      context: pipe(opts.context, Context.add(Scheduler)(scheduler.fork())),
-      fiberRefs: opts.fiberRefs.fork(),
       scope,
+      context: opts.context,
+      fiberRefs: opts.fiberRefs,
       flags: opts.flags,
     })
 

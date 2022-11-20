@@ -5,6 +5,7 @@ import { NonEmptyReadonlyArray } from '@fp-ts/data/ReadonlyArray'
 import * as Effect from './Effect.js'
 import * as Fiber from './Fiber.js'
 import { Layer } from './Layer.js'
+import { flow2 } from './_internal.js'
 
 export function provideService<S>(tag: Context.Tag<S>, service: S) {
   const addService = Context.add(tag)(service)
@@ -28,22 +29,19 @@ export function provideLayer<R2, E2, S>(layer: Layer<R2, E2, S>) {
     )
 }
 
-export function ask<S>(tag: Context.Tag<S>): Effect.Effect<S, never, S> {
-  return Effect.access(
-    (env: Context.Context<S>) =>
-      pipe(env, Context.get(tag as Context.Tags<S>), Effect.of) as Effect.Effect<never, never, S>,
-  )
-}
-
-export function asks<S, A>(tag: Context.Tag<S>, f: (s: S) => A): Effect.Effect<S, never, A> {
-  return pipe(ask(tag), Effect.map(f))
-}
-
 export function asksEffect<S, R, E, A>(
   tag: Context.Tag<S>,
   f: (s: S) => Effect.Effect<R, E, A>,
 ): Effect.Effect<R | S, E, A> {
-  return pipe(ask(tag), Effect.flatMap(f))
+  return Effect.access((env: Context.Context<S>) => pipe(env, Context.unsafeGet(tag), f))
+}
+
+export function ask<S>(tag: Context.Tag<S>): Effect.Effect<S, never, S> {
+  return asksEffect(tag, Effect.of)
+}
+
+export function asks<S, A>(tag: Context.Tag<S>, f: (s: S) => A): Effect.Effect<S, never, A> {
+  return asksEffect(tag, flow2(f, Effect.of))
 }
 
 export function zip<R2, E2, B>(second: Effect.Effect<R2, E2, B>) {

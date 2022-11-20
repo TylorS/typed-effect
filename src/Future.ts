@@ -1,10 +1,10 @@
 import { Disposable } from './Disposable.js'
-import { Effect } from './Effect.js'
+import { Effect, of, sync } from './Effect.js'
 
 export interface Future<R, E, A> {
   readonly state: FutureState<R, E, A>
   readonly addObserver: (f: (effect: Effect<R, E, A>) => void) => Disposable
-  readonly complete: (effect: Effect<R, E, A>) => boolean
+  readonly complete: (effect: Effect<R, E, A>) => Effect<never, never, boolean>
 }
 
 export interface ReadonlyFuture<R, E, A> extends Omit<Future<R, E, A>, 'complete'> {}
@@ -42,7 +42,7 @@ export function pending<R, E, A>(): Future<R, E, A> {
     })
   }
 
-  const complete = (effect: Effect<R, E, A>): boolean => {
+  const complete = (effect: Effect<R, E, A>) => {
     if (state.tag === 'Resolved') {
       return false
     }
@@ -58,7 +58,7 @@ export function pending<R, E, A>(): Future<R, E, A> {
       return state
     },
     addObserver,
-    complete,
+    complete: (eff) => sync(() => complete(eff)),
   }
 }
 
@@ -66,6 +66,6 @@ export function resolved<R, E, A>(effect: Effect<R, E, A>): Future<R, E, A> {
   return {
     state: { tag: 'Resolved', effect },
     addObserver: (f) => (f(effect), Disposable.unit),
-    complete: () => false,
+    complete: () => of(false),
   }
 }

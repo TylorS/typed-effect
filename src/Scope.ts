@@ -68,14 +68,16 @@ export function makeScope(): Scope {
       return true
     })
 
-  const fork = Effect.Effect(function* () {
-    const child = makeScope()
-    const disposable = yield* addFinalizer((exit) => child.close(exit))
+  const fork = Effect.uninterruptable(
+    Effect.Effect(function* () {
+      const child = makeScope()
+      const disposable = yield* addFinalizer((exit) => child.close(exit))
 
-    yield* child.addFinalizer(() => Effect.sync(() => disposable.dispose()))
+      yield* child.addFinalizer(() => Effect.sync(() => disposable.dispose()))
 
-    return child
-  })
+      return child
+    }),
+  )
 
   return {
     addFinalizer,
