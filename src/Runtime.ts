@@ -92,12 +92,16 @@ export function Runtime<R>(options: RuntimeOptions<R>): Runtime<R> {
   }
 }
 
+export const DefaultFiberScope = FiberScope(None)
+export const DefaultFiberRefs = makeFiberRefs()
+export const DefaultRuntimeFlags = RuntimeFlags()
+
 export const DefaultRuntime: Runtime<DefaultServices> = Runtime({
   id: None,
   context: DefaultServicesContext,
-  scope: FiberScope(None),
-  fiberRefs: makeFiberRefs(),
-  flags: RuntimeFlags(),
+  scope: DefaultFiberScope,
+  fiberRefs: DefaultFiberRefs,
+  flags: DefaultRuntimeFlags,
 })
 
 export const {
